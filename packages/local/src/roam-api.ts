@@ -1,4 +1,3 @@
-// src/core/roam-api.ts
 // Shared API functions for interacting with Roam's local API.
 // Used by both the CLI (connect command) and the MCP tool (setup_new_graph).
 

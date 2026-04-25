@@ -1,4 +1,3 @@
-// src/core/client.ts
 // v2.0.0 - Token-authenticated Roam Local API client
 
 import { readFile } from "fs/promises";

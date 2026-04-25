@@ -71,8 +71,12 @@ export async function defaultCreateClient(graph: ToolGraph): Promise<RoamActionC
 }
 
 // All core options become optional (locals fill in defaults). standaloneHandlers
-// is re-added here because core has no standalone tools after the split.
-export type LocalRouteToolCallOptions = Partial<RouteToolCallOptions> & {
+// is re-added here because core has no standalone tools after the split. The
+// Omit is defensive — it's a no-op today (core has no standaloneHandlers field)
+// but prevents silent merging if anyone re-adds it to core later.
+export type LocalRouteToolCallOptions = Partial<
+  Omit<RouteToolCallOptions, "standaloneHandlers">
+> & {
   /**
    * Override standalone tool handlers (e.g., a different list_graphs implementation).
    * Tools not present here use the default actions defined in graphManagementTools.

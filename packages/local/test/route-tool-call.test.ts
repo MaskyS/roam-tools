@@ -134,3 +134,92 @@ describe("local routeToolCall — standalone dispatch", () => {
     expect(text).toBe("custom-handler-result");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests E + F — get_graph_guidelines local-sync side flow
+// ---------------------------------------------------------------------------
+// The most user-visible local behavior: token revocation detection, accessLevel
+// sync to ~/.roam-tools.json, and result enrichment with grantedScopes.
+// Exercised via the default tokenInfoMode ("local-sync") that local's wrapper
+// passes when no third arg is given.
+describe("local routeToolCall — get_graph_guidelines local-sync side flow", () => {
+  it("Test E: active token with stale accessLevel triggers a config update + result enrichment", async () => {
+    vi.mocked(resolveGraph).mockResolvedValue({
+      name: "test-graph",
+      type: "hosted",
+      token: "roam-graph-local-token-fake",
+      nickname: "test",
+      accessLevel: "read-only",
+      lastKnownTokenStatus: "active",
+    });
+    vi.mocked(getPort).mockResolvedValue(3333);
+    mockCallSpy.mockResolvedValue({
+      success: true,
+      result: {
+        guidelines: "be nice",
+        starredPages: [],
+        todaysDailyNotePage: null,
+      },
+    });
+    mockGetTokenInfoSpy.mockResolvedValue({
+      status: "active",
+      info: {
+        success: true,
+        grantedAccessLevel: "read-append",
+        grantedScopes: { read: true, append: true, edit: false },
+      },
+    });
+
+    const result = await routeToolCall("get_graph_guidelines", { graph: "test" });
+
+    // Side flow ran
+    expect(mockGetTokenInfoSpy).toHaveBeenCalled();
+    // accessLevel changed (read-only → read-append) so config was rewritten
+    expect(updateGraphTokenStatus).toHaveBeenCalledWith("test", {
+      accessLevel: "read-append",
+      lastKnownTokenStatus: "active",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const text = (result.content[0] as { text: string }).text;
+    // Graph-name prefix from prependGraphInfo
+    expect(text.startsWith("Roam graph: test")).toBe(true);
+    // Result enriched by enrichResultWithTokenInfo
+    expect(text).toContain('"accessLevel": "read-append"');
+    expect(text).toContain('"scopes"');
+  });
+
+  it("Test F: revoked token updates lastKnownTokenStatus and prepends a warning", async () => {
+    vi.mocked(resolveGraph).mockResolvedValue({
+      name: "test-graph",
+      type: "hosted",
+      token: "roam-graph-local-token-fake",
+      nickname: "test",
+      accessLevel: "full",
+      lastKnownTokenStatus: "active",
+    });
+    vi.mocked(getPort).mockResolvedValue(3333);
+    mockCallSpy.mockResolvedValue({
+      success: true,
+      result: {
+        guidelines: "be nice",
+        starredPages: [],
+        todaysDailyNotePage: null,
+      },
+    });
+    mockGetTokenInfoSpy.mockResolvedValue({ status: "revoked" });
+
+    const result = await routeToolCall("get_graph_guidelines", { graph: "test" });
+
+    expect(mockGetTokenInfoSpy).toHaveBeenCalled();
+    // Status flipped from active → revoked, so the config was patched
+    expect(updateGraphTokenStatus).toHaveBeenCalledWith("test", {
+      lastKnownTokenStatus: "revoked",
+    });
+
+    const text = (result.content[0] as { text: string }).text;
+    // enrichResultWithTokenStatus prepends a fixed warning prefix
+    expect(text).toContain("WARNING: The token for this graph has been revoked.");
+    expect(text).toContain("Roam graph: test");
+  });
+});

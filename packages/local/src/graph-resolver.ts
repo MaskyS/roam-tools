@@ -1,4 +1,3 @@
-// src/core/graph-resolver.ts
 // Stateless config-based graph resolution with token authentication
 
 import { readFile, writeFile, chmod, stat } from "fs/promises";

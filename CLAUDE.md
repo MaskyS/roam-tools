@@ -44,6 +44,10 @@ The 9 locations:
 
 Run `npm run version:check` to verify all versions are consistent.
 
+### Transitional partial-publish state (0.6.0)
+
+During the rollout of the core/local split, only `@roam-research/roam-tools-core@0.6.0` is published to npm. `@roam-research/roam-tools-local`, `@roam-research/roam-mcp`, and `@roam-research/roam-cli` remain at 0.5.x on npm even though the working tree has them at 0.6.0 in lockstep — this lets the hosted MCP in `relemma/functions_v2` integrate against the new transport-agnostic core without affecting local users (who pull `roam-mcp@0.5.x` exact-pinned to `core@0.5.x`). When the hosted integration is proven, a future bump publishes all four packages together via `npm run publish:all`.
+
 ## Architecture
 
 This is a monorepo with four npm packages for Roam Research tools:
