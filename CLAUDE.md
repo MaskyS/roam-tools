@@ -46,7 +46,20 @@ Run `npm run version:check` to verify all versions are consistent.
 
 ### Transitional partial-publish state (0.6.0)
 
-During the rollout of the core/local split, only `@roam-research/roam-tools-core@0.6.0` is published to npm. `@roam-research/roam-tools-local`, `@roam-research/roam-mcp`, and `@roam-research/roam-cli` remain at 0.5.x on npm even though the working tree has them at 0.6.0 in lockstep — this lets the hosted MCP in `relemma/functions_v2` integrate against the new transport-agnostic core without affecting local users (who pull `roam-mcp@0.5.x` exact-pinned to `core@0.5.x`). When the hosted integration is proven, a future bump publishes all four packages together via `npm run publish:all`.
+`@roam-research/roam-tools-core@0.6.0` was published to npm on **2026-04-25**. `@roam-research/roam-tools-local`, `@roam-research/roam-mcp`, and `@roam-research/roam-cli` remain at 0.5.x on npm even though the working tree has them at 0.6.0 in lockstep. This lets the hosted MCP in `relemma/functions_v2` integrate against the new transport-agnostic core without affecting local users. When hosted integration is proven, a future bump publishes all four packages together via `npm run publish:all`.
+
+**Why the partial publish is safe (verified 2026-04-25 via `npm view`):** every published `roam-mcp` and `roam-cli` version uses an **exact pin** to a specific `core` version — no caret, no tilde, no range. This is the load-bearing invariant. The full audit:
+
+| Package           | Versions on npm                                      | `core` dep pin                                                    |
+| ----------------- | ---------------------------------------------------- | ----------------------------------------------------------------- |
+| `roam-mcp`        | `0.3.1`, `0.3.2`                                     | none — pre-split, all-in-one                                      |
+| `roam-mcp`        | `0.4.0` → `0.5.1`                                    | exact `0.4.0` → exact `0.5.1` (one-to-one with mcp's own version) |
+| `roam-cli`        | `0.4.0` → `0.5.1`                                    | exact `0.4.0` → exact `0.5.1` (one-to-one with cli's own version) |
+| `roam-tools-core` | `0.4.0`, `0.4.1`, `0.4.2`, `0.5.0`, `0.5.1`, `0.6.0` | n/a — terminal package                                            |
+
+Implication: `npx roam-mcp@latest` resolves to `roam-mcp@0.5.1` → `core@0.5.1`. Cannot pick up `0.6.0`. Same for any historical `npm install` — even `roam-mcp@0.4.0` is safe because it pins `core@0.4.0` exactly. The only way to reach `core@0.6.0` is to install it explicitly (`npm install @roam-research/roam-tools-core[@latest|@0.6.0|@^0.6.0]`), which is what the hosted MCP does on purpose.
+
+**Maintainer obligation:** the `bump-version.mjs` script writes exact dep strings (no semver ranges). Do not change this — the partial-publish strategy depends on it. If a future PR introduces caret/tilde dep ranges in mcp's or cli's `package.json`, the safety guarantee above no longer holds and we'd have to publish all four packages together every time.
 
 ## Architecture
 
