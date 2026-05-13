@@ -134,11 +134,19 @@ export const ErrorCodes = {
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
-// Custom error class with error code and optional context
+// Custom error class with error code and optional context.
+//
+// The `code` parameter accepts both the canonical `ErrorCode` literals
+// (for autocomplete + cross-package consistency) AND arbitrary strings
+// (so transports can pass through codes emitted by their backend without
+// requiring a coordinated PR to extend the union). The `(string & {})`
+// intersection is the "branded string" idiom — structurally a no-op,
+// but it prevents TypeScript from collapsing the union to plain `string`,
+// preserving IDE autocomplete on `ErrorCodes.X` members.
 export class RoamError extends Error {
   constructor(
     message: string,
-    public readonly code?: ErrorCode,
+    public readonly code?: ErrorCode | (string & {}),
     public readonly context?: Record<string, unknown>,
   ) {
     super(message);
