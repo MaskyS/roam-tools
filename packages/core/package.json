@@ -1,6 +1,6 @@
 {
   "name": "@roam-research/roam-tools-core",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Transport-agnostic core for Roam Research MCP and CLI tools",
   "repository": {
     "type": "git",

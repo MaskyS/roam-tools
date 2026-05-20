@@ -44,9 +44,15 @@ The 9 locations:
 
 Run `npm run version:check` to verify all versions are consistent.
 
-### Transitional partial-publish state (0.6.0)
+### Partial-publish state (current: core@0.6.2)
 
-`@roam-research/roam-tools-core@0.6.0` was published to npm on **2026-04-25**. `@roam-research/roam-tools-local`, `@roam-research/roam-mcp`, and `@roam-research/roam-cli` remain at 0.5.x on npm even though the working tree has them at 0.6.0 in lockstep. This lets the hosted MCP in `relemma/functions_v2` integrate against the new transport-agnostic core without affecting local users. When hosted integration is proven, a future bump publishes all four packages together via `npm run publish:all`.
+Only `@roam-research/roam-tools-core` is currently on npm. Timeline:
+
+- **0.6.0** shipped **2026-04-25** (transport-agnostic split; new `roam-tools-local` package introduced in the working tree but never published).
+- **0.6.1** shipped **2026-05-09** (Phase 2c integration: added 6 cloud-transport-only codes to `ErrorCodes` — `MISSING_AUTH`, `INSUFFICIENT_PERMISSION`, `NOT_IMPLEMENTED`, `GRAPH_UNSUPPORTED`, `ACTION_NOT_AVAILABLE`, `PEER_NOT_READY`).
+- **0.6.2** shipped **2026-05-13** (widened `RoamError.code` to `ErrorCode | (string & {})` for cloud-transport opacity; removed 3 `as any` casts in `packages/local/src/client.ts`; updated `docs/remote-mcp-integration.md`. See "Code vocabulary" below.)
+
+`@roam-research/roam-tools-local` has never been published to npm at all (the working tree carries it; no public surface). `@roam-research/roam-mcp` and `@roam-research/roam-cli` remain at `0.5.1` on npm even though the working tree has them at 0.6.x in lockstep. This lets the hosted MCP in `relemma/functions_v2` integrate against the new transport-agnostic core without affecting local users. When hosted integration is proven, a future bump publishes all four packages together via `npm run publish:all`.
 
 **Why the partial publish is safe (verified 2026-04-25 via `npm view`):** every published `roam-mcp` and `roam-cli` version uses an **exact pin** to a specific `core` version — no caret, no tilde, no range. This is the load-bearing invariant. The full audit:
 
@@ -60,6 +66,16 @@ Run `npm run version:check` to verify all versions are consistent.
 Implication: `npx roam-mcp@latest` resolves to `roam-mcp@0.5.1` → `core@0.5.1`. Cannot pick up `0.6.0`. Same for any historical `npm install` — even `roam-mcp@0.4.0` is safe because it pins `core@0.4.0` exactly. The only way to reach `core@0.6.0` is to install it explicitly (`npm install @roam-research/roam-tools-core[@latest|@0.6.0|@^0.6.0]`), which is what the hosted MCP does on purpose.
 
 **Maintainer obligation:** the `bump-version.mjs` script writes exact dep strings (no semver ranges). Do not change this — the partial-publish strategy depends on it. If a future PR introduces caret/tilde dep ranges in mcp's or cli's `package.json`, the safety guarantee above no longer holds and we'd have to publish all four packages together every time.
+
+### Code vocabulary (post-0.6.2)
+
+`docs/remote-mcp-integration.md` §10 is the authoritative source for the `ErrorCodes` framing. Short version:
+
+- **Since `core@0.6.2`**: `RoamError.code` accepts arbitrary strings (`ErrorCode | (string & {})`), not just the enum members. The `(string & {})` branded-string intersection preserves IDE autocomplete on known `ErrorCodes.X` literals while accepting any string at runtime.
+- **`ErrorCodes` is a recommended vocabulary, not a contract**. It exists for IDE autocomplete, cross-package consistency, and the local-transport `case` matches in `RoamClient.handleApiError`. New codes can be added by PR (optional, not required).
+- **For the cloud transport**: codes emitted by the relemma backend pass through verbatim — `relemma/src/common/relemma/common/api/mcp_error_codes.cljc` is the source of truth for cloud-emitted codes. A new Clojure-side code reaches the agent's JSON envelope without any TS-side coordination.
+- **For the local transport**: `RoamClient` in `packages/local/src/client.ts` keeps using `ErrorCodes.X` constants for its own emissions (`VERSION_MISMATCH`, `UNKNOWN_ACTION`, `INTERNAL_ERROR`, `CONNECTION_FAILED`) and for the 401/403 paths where Electron's code is passed through directly (the `as any` casts that bypassed the strict type were removed in `0.6.2`).
+- **Two TS-only consumer call sites** still narrow on specific codes: `packages/mcp/src/index.ts:104` (`error.code === ErrorCodes.CONFIG_TOO_NEW`) and `packages/cli/src/index.ts:153` (`error.code === ErrorCodes.GRAPH_NOT_SELECTED`). Both continue to work after widening — TypeScript preserves runtime equality and literal narrowing.
 
 ## Architecture
 

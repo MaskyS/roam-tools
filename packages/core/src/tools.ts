@@ -131,8 +131,7 @@ export function defineStandaloneTool<T extends z.ZodRawShape>(
 }
 
 // Note appended to all client tool descriptions
-const GUIDELINES_NOTE =
-  "\n\nNote: Call get_graph_guidelines first when starting to work with a graph.";
+const GUIDELINES_NOTE = "\n\nCall get_graph_guidelines first when starting work on a graph.";
 
 // Data Tools (require graph/client; reusable across local + hosted MCP transports)
 export const dataTools: ClientToolDefinition[] = [

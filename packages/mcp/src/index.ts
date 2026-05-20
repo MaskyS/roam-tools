@@ -70,7 +70,16 @@ import {
   ErrorCodes,
 } from "@roam-research/roam-tools-local";
 
-const server = new McpServer({ name: "roam-mcp", version: "0.6.2" });
+const server = new McpServer(
+  { name: "roam-mcp", version: "0.6.3" },
+  {
+    instructions:
+      "This server exposes tools for a user's Roam Research graph(s).\n" +
+      "Before using any content tool, orient yourself:\n" +
+      "1. If you don't already know which graph to use (or the user may have several configured), call list_graphs first and pick the right one.\n" +
+      "2. Call get_graph_guidelines for that graph once — it returns the user's naming conventions, structure preferences, and required orientation steps. Skipping it risks violating the user's setup.",
+  },
+);
 
 // Register each tool with its Zod schema
 for (const tool of tools) {
