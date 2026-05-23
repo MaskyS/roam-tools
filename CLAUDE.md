@@ -50,7 +50,7 @@ Only `@roam-research/roam-tools-core` is currently on npm. Timeline:
 
 - **0.6.0** shipped **2026-04-25** (transport-agnostic split; new `roam-tools-local` package introduced in the working tree but never published).
 - **0.6.1** shipped **2026-05-09** (Phase 2c integration: added 6 cloud-transport-only codes to `ErrorCodes` — `MISSING_AUTH`, `INSUFFICIENT_PERMISSION`, `NOT_IMPLEMENTED`, `GRAPH_UNSUPPORTED`, `ACTION_NOT_AVAILABLE`, `PEER_NOT_READY`).
-- **0.6.2** shipped **2026-05-13** (widened `RoamError.code` to `ErrorCode | (string & {})` for cloud-transport opacity; removed 3 `as any` casts in `packages/local/src/client.ts`; updated `docs/remote-mcp-integration.md`. See "Code vocabulary" below.)
+- **0.6.2** shipped **2026-05-13** (widened `RoamError.code` to `ErrorCode | (string & {})` for cloud-transport opacity; removed 3 `as any` casts in `packages/local/src/client.ts`; updated the remote-MCP integration notes. See "Code vocabulary" below and `docs/architecture.md` for the current contract framing.)
 - **0.6.3** shipped **2026-05-20** (trimmed `GUIDELINES_NOTE` — the orientation note appended to every client tool description — to a quiet, transport-neutral one-liner, dropping the "roam mcp tool …" phrasing that misread in CLI/hosted contexts. **Published `core@0.6.3` contains only this description change.** The same commit also added an MCP server `instructions` field in `packages/mcp/src/index.ts` to steer clients through `list_graphs` → `get_graph_guidelines`, but that lives in the unpublished `roam-mcp` package — it is NOT part of published core.)
 
 `@roam-research/roam-tools-local` has never been published to npm at all (the working tree carries it; no public surface). `@roam-research/roam-mcp` and `@roam-research/roam-cli` remain at `0.5.1` on npm even though the working tree has them at 0.6.x in lockstep. This lets the hosted MCP in `relemma/functions_v2` integrate against the new transport-agnostic core without affecting local users. When hosted integration is proven, a future bump publishes all four packages together via `npm run publish:all`.
@@ -70,7 +70,7 @@ Implication: `npx roam-mcp@latest` resolves to `roam-mcp@0.5.1` → `core@0.5.1`
 
 ### Code vocabulary (post-0.6.2)
 
-`docs/remote-mcp-integration.md` §10 is the authoritative source for the `ErrorCodes` framing. Short version:
+`docs/architecture.md` is the current authoritative source for the `ErrorCodes` framing. Short version:
 
 - **Since `core@0.6.2`**: `RoamError.code` accepts arbitrary strings (`ErrorCode | (string & {})`), not just the enum members. The `(string & {})` branded-string intersection preserves IDE autocomplete on known `ErrorCodes.X` literals while accepting any string at runtime.
 - **`ErrorCodes` is a recommended vocabulary, not a contract**. It exists for IDE autocomplete, cross-package consistency, and the local-transport `case` matches in `RoamClient.handleApiError`. New codes can be added by PR (optional, not required).
@@ -79,6 +79,8 @@ Implication: `npx roam-mcp@latest` resolves to `roam-mcp@0.5.1` → `core@0.5.1`
 - **Two TS-only consumer call sites** still narrow on specific codes: `packages/mcp/src/index.ts:104` (`error.code === ErrorCodes.CONFIG_TOO_NEW`) and `packages/cli/src/index.ts:153` (`error.code === ErrorCodes.GRAPH_NOT_SELECTED`). Both continue to work after widening — TypeScript preserves runtime equality and literal narrowing.
 
 ## Architecture
+
+> **See also [`docs/architecture.md`](docs/architecture.md)** — the transport-agnostic contract external consumers (including the hosted MCP) depend on, the cross-transport discrepancies, and the rules for changing this repo without breaking the remote MCP.
 
 This is a monorepo with four npm packages for Roam Research tools:
 

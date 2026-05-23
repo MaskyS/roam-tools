@@ -208,13 +208,14 @@ Run `roam --help` to see all available commands. You can also use `npx @roam-res
 
 ## Packages
 
-This repository is a monorepo with three packages:
+This repository is a monorepo with four packages:
 
-| Package                                           | Description                                                    |
-| ------------------------------------------------- | -------------------------------------------------------------- |
-| [`@roam-research/roam-tools-core`](packages/core) | Shared core library (client, tools, operations, config, types) |
-| [`@roam-research/roam-mcp`](packages/mcp)         | MCP server — connect Claude/Cursor/etc. to Roam                |
-| [`@roam-research/roam-cli`](packages/cli)         | CLI — setup and direct tool access                             |
+| Package                                             | Description                                                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [`@roam-research/roam-tools-core`](packages/core)   | Transport-agnostic core library (tools, operations, types, dispatch)                                         |
+| [`@roam-research/roam-tools-local`](packages/local) | Local Roam Desktop transport (client, config reader, connect) — internal dependency, not currently published |
+| [`@roam-research/roam-mcp`](packages/mcp)           | MCP server — connect Claude/Cursor/etc. to Roam                                                              |
+| [`@roam-research/roam-cli`](packages/cli)           | CLI — setup and direct tool access                                                                           |
 
 ## Development
 
@@ -239,7 +240,7 @@ npm run version:check    # Verify all package versions are consistent
 npm run version:bump 0.5.0  # Bump all packages to a new version
 ```
 
-See [npm packaging design](docs/npm-packaging-design.md) for why the packages are structured this way.
+See [architecture](docs/architecture.md) for how the four packages divide responsibility and the core contract external consumers depend on, and [npm packaging design](docs/npm-packaging-design.md) for why the packages are structured this way.
 
 ## Contributing
 
