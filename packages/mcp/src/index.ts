@@ -71,7 +71,7 @@ import {
 } from "@roam-research/roam-tools-local";
 
 const server = new McpServer(
-  { name: "roam-mcp", version: "0.6.3" },
+  { name: "roam-mcp", version: "0.6.4" },
   {
     instructions:
       "This server exposes tools for a user's Roam Research graph(s).\n" +
