@@ -381,7 +381,7 @@ export async function resolveGraph(providedGraph?: string): Promise<ResolvedGrap
         {
           available_graphs: await getConfiguredGraphs(),
           instruction:
-            "Pass the 'nickname' value as the graph parameter. After identifying which graph to use, ALWAYS call get_graph_guidelines next — it returns essential context and orientation for the session.",
+            "Pass the 'nickname' value as the graph parameter. Once you've picked one, call get_graph_guidelines for that graph — it returns the user's setup (naming conventions, structural preferences, orientation actions). Skip it and you may operate on assumptions the user has already overridden.",
         },
       );
     }
@@ -415,7 +415,7 @@ export async function resolveGraph(providedGraph?: string): Promise<ResolvedGrap
     {
       available_graphs: await getConfiguredGraphs(),
       instruction:
-        "Pass the 'nickname' value as the graph parameter. After identifying which graph to use, ALWAYS call get_graph_guidelines next — it returns essential context and orientation for the session.",
+        "Pass the 'nickname' value as the graph parameter. Once you've picked one, call get_graph_guidelines for that graph — it returns the user's setup (naming conventions, structural preferences, orientation actions). Skip it and you may operate on assumptions the user has already overridden.",
     },
   );
 }

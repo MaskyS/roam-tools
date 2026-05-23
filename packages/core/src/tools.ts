@@ -131,13 +131,14 @@ export function defineStandaloneTool<T extends z.ZodRawShape>(
 }
 
 // Note appended to all client tool descriptions
-const GUIDELINES_NOTE = "\n\nCall get_graph_guidelines first when starting work on a graph.";
+const GUIDELINES_NOTE =
+  "\n\n(If you haven't fetched this graph's guidelines yet, call get_graph_guidelines — they may change how to handle this operation.)";
 
 // Data Tools (require graph/client; reusable across local + hosted MCP transports)
 export const dataTools: ClientToolDefinition[] = [
   defineTool(
     "get_graph_guidelines",
-    "IMPORTANT: Call this tool first when starting to work with a graph, before performing any other operations. Returns user-defined instructions and preferences for AI agents. The user may have specified naming conventions, preferred structures, or constraints that should guide your behavior. After receiving the response, follow the nextSteps field — it contains orientation actions you should take before proceeding.",
+    "Returns this graph's agent-facing setup: naming conventions, structural preferences, orientation actions, and any constraints the user has explicitly recorded for AI agents. Call once per graph per session before reading or writing content — skipping it means operating on assumptions the user has already overridden, so your work will likely need to be redone. The `nextSteps` field in the response lists orientation actions to take before proceeding.",
     GetGuidelinesSchema,
     getGuidelines,
   ),
