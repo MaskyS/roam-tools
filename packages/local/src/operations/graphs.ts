@@ -58,7 +58,7 @@ export async function listGraphs(): Promise<CallToolResult> {
     return textResult({
       graphs,
       instruction:
-        "Pass the 'nickname' value as the graph parameter. Once you've picked one, call get_graph_guidelines for that graph — it returns the user's setup (naming conventions, structural preferences, orientation actions). Skip it and you may operate on assumptions the user has already overridden.",
+        "Pass the graph's nickname or name as the graph parameter. Once you've picked one, call get_graph_guidelines for that graph — it returns the user's setup (naming conventions, structural preferences, orientation actions). Skip it and you may operate on assumptions the user has already overridden.",
       setup:
         "To connect additional graphs, use the setup_new_graph tool (call it without arguments to see available graphs).",
     });
@@ -187,7 +187,7 @@ export async function setupNewGraph(args: SetupNewGraphParams): Promise<CallTool
           lastKnownTokenStatus: g.lastKnownTokenStatus,
         })),
         instruction:
-          "This graph is already configured. Pass the 'nickname' value as the graph parameter, then call get_graph_guidelines for that graph.",
+          "This graph is already configured. Pass its nickname or name as the graph parameter, then call get_graph_guidelines for that graph.",
       });
     }
     // All revoked — fall through to re-request a new token

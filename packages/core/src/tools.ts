@@ -70,7 +70,9 @@ const GraphSchema = z.object({
   graph: z
     .string()
     .optional()
-    .describe("Graph nickname or name (optional - auto-selects if only one graph is configured)"),
+    .describe(
+      "Graph to act on, by nickname or name. Optional — if only one graph is available, it is used automatically.",
+    ),
 });
 
 // Helper to extend any schema with graph parameter
