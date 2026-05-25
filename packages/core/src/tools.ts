@@ -159,7 +159,8 @@ export const dataTools: ClientToolDefinition[] = [
   ),
   defineTool(
     "update_block",
-    "Update an existing block's content or properties." + GUIDELINES_NOTE,
+    "Update a single existing block's text and display properties (heading, collapse, alignment, children view type). Affects only the block with `uid`: `string` sets that block's literal text — it is NOT expanded into child blocks (unlike create_block/create_page), and the block's existing children are left untouched. To add or restructure children, use create_block / move_block / delete_block." +
+      GUIDELINES_NOTE,
     UpdateBlockSchema,
     updateBlock,
   ),

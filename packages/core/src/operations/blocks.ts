@@ -46,7 +46,12 @@ export const GetBlockSchema = z.object({
 
 export const UpdateBlockSchema = z.object({
   uid: z.string().describe("Block UID"),
-  string: z.string().optional().describe("New text content"),
+  string: z
+    .string()
+    .optional()
+    .describe(
+      "New literal text for this block (the Roam block string, including inline markup like **bold**, [[links]], ((refs))). Set as-is — NOT parsed into nested child blocks. Updates this one block only.",
+    ),
   open: z.boolean().optional().describe("Collapse state"),
   heading: z.coerce.number().optional().describe("Heading level (0-3)"),
   childrenViewType: z
