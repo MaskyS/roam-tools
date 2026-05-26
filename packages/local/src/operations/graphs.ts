@@ -1,16 +1,14 @@
-// src/core/operations/graphs.ts
 // Graph management operations
 
 import { z } from "zod";
-import type { CallToolResult } from "../types.js";
-import { textResult, RoamError, ErrorCodes } from "../types.js";
+import type { CallToolResult, GraphConfig } from "@roam-research/roam-tools-core";
+import { textResult, RoamError, ErrorCodes } from "@roam-research/roam-tools-core";
 import {
   getConfiguredGraphs,
   getConfiguredGraphsSafe,
   getPort,
   saveGraphToConfig,
 } from "../graph-resolver.js";
-import type { GraphConfig } from "../types.js";
 import type { AvailableGraph } from "../roam-api.js";
 import { fetchAvailableGraphs, requestToken, sleep, openRoamApp, slugify } from "../roam-api.js";
 
@@ -60,7 +58,7 @@ export async function listGraphs(): Promise<CallToolResult> {
     return textResult({
       graphs,
       instruction:
-        "Pass the 'nickname' value as the graph parameter. After identifying which graph to use, ALWAYS call get_graph_guidelines next — it returns essential context and orientation for the session.",
+        "Pass the graph's nickname or name as the graph parameter. Once you've picked one, call get_graph_guidelines for that graph — it returns the user's setup (naming conventions, structural preferences, orientation actions). Skip it and you may operate on assumptions the user has already overridden.",
       setup:
         "To connect additional graphs, use the setup_new_graph tool (call it without arguments to see available graphs).",
     });
@@ -189,7 +187,7 @@ export async function setupNewGraph(args: SetupNewGraphParams): Promise<CallTool
           lastKnownTokenStatus: g.lastKnownTokenStatus,
         })),
         instruction:
-          "This graph is already configured. Pass the 'nickname' value as the graph parameter. Call get_graph_guidelines before operating on it.",
+          "This graph is already configured. Pass its nickname or name as the graph parameter, then call get_graph_guidelines for that graph.",
       });
     }
     // All revoked — fall through to re-request a new token
@@ -282,6 +280,6 @@ export async function setupNewGraph(args: SetupNewGraphParams): Promise<CallTool
       accessLevel,
     },
     instruction:
-      "Graph connected successfully. Call get_graph_guidelines next to understand the graph's conventions before making any changes.",
+      "Graph connected. Call get_graph_guidelines for this graph next to fetch the user's conventions and orientation steps — skip it and you may operate on assumptions the user has already overridden.",
   });
 }

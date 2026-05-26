@@ -32,7 +32,7 @@ Examples:
     process.exit(0);
   }
 
-  // These flags must stay in sync with ConnectOptions in packages/core/src/connect.ts
+  // These flags must stay in sync with ConnectOptions in packages/local/src/connect.ts
   // and the Commander options in packages/cli/src/index.ts.
   function getFlag(flag: string): string | undefined {
     const idx = args.indexOf(flag);
@@ -51,7 +51,7 @@ Examples:
     remove: args.includes("--remove"),
   };
 
-  const { connect } = await import("@roam-research/roam-tools-core/connect");
+  const { connect } = await import("@roam-research/roam-tools-local/connect");
   await connect(options);
   process.exit(0);
 }
@@ -68,9 +68,19 @@ import {
   getMcpConfig,
   RoamError,
   ErrorCodes,
-} from "@roam-research/roam-tools-core";
+} from "@roam-research/roam-tools-local";
 
-const server = new McpServer({ name: "roam-mcp", version: "0.5.1" });
+// If these instructions change, the remote MCP server may need the same update.
+const server = new McpServer(
+  { name: "roam-mcp", version: "0.6.5" },
+  {
+    instructions:
+      "This server exposes tools for a user's Roam Research graph(s).\n" +
+      "Before your FIRST content operation in a session — read OR write — orient yourself:\n" +
+      "1. If you don't already know which graph to use (or the user may have several configured), call list_graphs first and pick the right one.\n" +
+      "2. Call get_graph_guidelines for that graph once. Do this even for operations that look straightforward, including simple reads — whether an operation is straightforward is itself something the guidelines may determine. They return the user's naming conventions, structure/display preferences, and required orientation steps; skipping them risks violating the user's setup.",
+  },
+);
 
 // Register each tool with its Zod schema
 for (const tool of tools) {

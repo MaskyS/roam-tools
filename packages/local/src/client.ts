@@ -1,4 +1,3 @@
-// src/core/client.ts
 // v2.0.0 - Token-authenticated Roam Local API client
 
 import { readFile } from "fs/promises";
@@ -7,13 +6,18 @@ import { join } from "path";
 import open from "open";
 import type {
   RoamResponse,
-  RoamClientConfig,
   RoamApiError,
   GraphType,
   TokenInfoResult,
   TokenInfoResponse,
-} from "./types.js";
-import { EXPECTED_API_VERSION, getErrorMessage, RoamError, ErrorCodes } from "./types.js";
+} from "@roam-research/roam-tools-core";
+import {
+  EXPECTED_API_VERSION,
+  getErrorMessage,
+  RoamError,
+  ErrorCodes,
+} from "@roam-research/roam-tools-core";
+import type { RoamClientConfig } from "./types.js";
 
 export class RoamClient {
   private graphName: string;
@@ -191,12 +195,12 @@ export class RoamClient {
 
     // 401 - Authentication errors
     if (status === 401) {
-      throw new RoamError(this.getAuthErrorGuidance(code), code as any);
+      throw new RoamError(this.getAuthErrorGuidance(code), code);
     }
 
     // 403 - Permission errors
     if (status === 403) {
-      throw new RoamError(this.getPermissionErrorGuidance(code, error), code as any);
+      throw new RoamError(this.getPermissionErrorGuidance(code, error), code);
     }
 
     // 404 - Unknown action
@@ -214,7 +218,7 @@ export class RoamClient {
     }
 
     // Other errors
-    throw new RoamError(message, code as any);
+    throw new RoamError(message, code);
   }
 
   private checkResponse<T>(response: RoamResponse<T>, httpStatus: number): void {

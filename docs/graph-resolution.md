@@ -69,6 +69,22 @@ If the file doesn't exist, defaults to port 3333.
 | Invalid token                     | Authentication error with guidance                                        |
 | Roam not running                  | Launches Roam via deep link and retries                                   |
 
+## RoamClient Error Mapping
+
+What the local `RoamClient` throws for each Roam Desktop API response. Source of truth: `handleApiError` in `packages/local/src/client.ts`.
+
+| Desktop API response                                                       | `RoamClient` throws                                                                                                                                                                                 |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `success:false` with `code:"VERSION_MISMATCH"` (any status; checked first) | `VERSION_MISMATCH` — message advises which side (Roam vs MCP server) to update, based on server version vs `EXPECTED_API_VERSION`                                                                   |
+| HTTP 401                                                                   | `RoamError(authGuidance, code)` — **passes the server's `code` through** (commonly `MISSING_TOKEN` / `INVALID_TOKEN_FORMAT` / `WRONG_GRAPH_TYPE` / `TOKEN_NOT_FOUND`); guidance text varies by code |
+| HTTP 403                                                                   | `RoamError(permissionGuidance, code)` — **passes the server's `code` through** (commonly `INSUFFICIENT_SCOPE` / `SCOPE_EXCEEDS_PERMISSION`)                                                         |
+| HTTP 404                                                                   | `UNKNOWN_ACTION`                                                                                                                                                                                    |
+| HTTP ≥ 500                                                                 | `INTERNAL_ERROR` (adds an encrypted-graph hint when the message mentions a promise error)                                                                                                           |
+| Other non-success                                                          | `RoamError(message, code)` — passes the server's `code` through                                                                                                                                     |
+| Network error / timeout / connection refused (after retries)               | `CONNECTION_FAILED` — on connection-refused, first launches Roam via deep link and retries                                                                                                          |
+
+This is the **local** transport's mapping. A hosted consumer maps its own backend's responses independently — see `docs/architecture.md` §2c, where `ErrorCodes` is described as a recommended vocabulary, not a hard contract.
+
 ## Graph Type Handling
 
 - **Hosted graphs** (default): Standard cloud-synced Roam graphs

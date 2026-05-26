@@ -1,7 +1,7 @@
 {
   "name": "@roam-research/roam-cli",
-  "version": "0.5.1",
-  "description": "Roam Research CLI",
+  "version": "0.6.5",
+  "description": "Official command-line interface for Roam Research",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Roam-Research/roam-tools.git",
@@ -19,7 +19,10 @@
   "keywords": [
     "roam",
     "roam-research",
-    "cli"
+    "cli",
+    "ai",
+    "claude",
+    "mcp"
   ],
   "publishConfig": {
     "access": "public"
@@ -33,6 +36,6 @@
   "dependencies": {
     "commander": "^14.0.2",
     "zod": "^3.25.76",
-    "@roam-research/roam-tools-core": "0.5.1"
+    "@roam-research/roam-tools-local": "0.6.5"
   }
 }

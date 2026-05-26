@@ -1,70 +1,84 @@
 # npm Packaging Design
 
+This doc explains why the npm packages are split the way they are. For the core public contract and hosted-MCP compatibility rules, see [`docs/architecture.md`](architecture.md).
+
 ## What This Repository Contains
 
-This is a monorepo with three packages that share a common core:
+This is a monorepo with four packages:
 
-1. **MCP Server** (`packages/mcp/`) — A Model Context Protocol server that communicates over stdio. MCP clients (Claude Desktop, Cursor, etc.) launch this process and talk to it via stdin/stdout. It exposes Roam Research operations as MCP tools.
+1. **Core** (`packages/core/`) — transport-agnostic library: types, Zod schemas, tool registry, operation functions, and `routeToolCall`. It has no local Desktop transport, no config-file reader, and no setup flow.
 
-2. **CLI** (`packages/cli/`) — A command-line interface (Commander.js). Used for setup (`connect` to authenticate with a Roam graph) and direct tool access (`search`, `get-page`, etc.). Auto-generated from the same tool definitions as the MCP server.
+2. **Local transport** (`packages/local/`) — local Roam Desktop specialization: `RoamClient`, `~/.roam-tools.json` graph resolution, `connect`, and the local standalone graph-management tools. It depends on core.
 
-3. **Core** (`packages/core/`) — Shared layer: Roam API client, tool definitions, graph resolution, operations. Both MCP server and CLI import from here via `@roam-research/roam-tools-core`.
+3. **MCP server** (`packages/mcp/`) — stdio Model Context Protocol server. It imports from local and exposes the combined local tool registry to MCP clients.
+
+4. **CLI** (`packages/cli/`) — Commander.js command-line interface. It imports from local and generates commands from the same tool definitions used by the MCP server.
 
 ## Packages
 
-| Package                          | Bin        | Purpose              | Used by               |
-| -------------------------------- | ---------- | -------------------- | --------------------- |
-| `@roam-research/roam-tools-core` | —          | Shared core library  | MCP, CLI (dependency) |
-| `@roam-research/roam-mcp`        | `roam-mcp` | MCP stdio server     | MCP clients           |
-| `@roam-research/roam-cli`        | `roam`     | CLI with subcommands | Humans                |
+| Package                           | Bin        | Purpose                             | Used by                         |
+| --------------------------------- | ---------- | ----------------------------------- | ------------------------------- |
+| `@roam-research/roam-tools-core`  | —          | Transport-agnostic core library     | Local package; hosted transport |
+| `@roam-research/roam-tools-local` | —          | Local Roam Desktop transport        | MCP and CLI packages            |
+| `@roam-research/roam-mcp`         | `roam-mcp` | MCP stdio server                    | MCP clients                     |
+| `@roam-research/roam-cli`         | `roam`     | CLI with setup and tool subcommands | Humans and scripts              |
 
-### Why three packages
+### Why four packages
 
-- The MCP server doesn't need CLI-only dependencies (`commander`, `@inquirer/prompts`)
-- The CLI doesn't need the MCP SDK for its binary
-- Users who only want the MCP server don't need to download CLI dependencies
-- The core library is shared and only installed once via npm deduplication
+- Hosted MCP transports can depend on `@roam-research/roam-tools-core` alone and inject their own graph resolver and authenticated client.
+- Local-only dependencies (`open`, `@inquirer/prompts`, filesystem config I/O) stay out of core.
+- MCP and CLI remain thin wrappers over the local transport, without sharing each other's entrypoint-specific dependencies.
+- The local `./connect` subpath keeps prompt dependencies out of normal MCP server startup.
+- Sibling package dependencies are pinned exactly so published packages do not silently mix untested versions.
 
 ### Architecture
 
 ```mermaid
 graph TD
-    subgraph "Three Packages"
-        E["@roam-research/roam-tools-core"] --> F["@roam-research/roam-mcp<br/>(MCP server)"]
-        E --> G["@roam-research/roam-cli<br/>(CLI)"]
-    end
+    Core["@roam-research/roam-tools-core<br/>transport-agnostic"]
+    Local["@roam-research/roam-tools-local<br/>local Desktop transport"]
+    MCP["@roam-research/roam-mcp<br/>(bin: roam-mcp)"]
+    CLI["@roam-research/roam-cli<br/>(bin: roam)"]
+    Hosted["hosted MCP transport<br/>(out of repo)"]
+
+    Core --> Local
+    Local --> MCP
+    Local --> CLI
+    Core --> Hosted
 ```
 
-Both MCP and CLI are thin wrappers — all real logic lives in core. Here's the runtime data flow for a tool call like `search`:
+Local MCP tool-call flow:
 
 ```mermaid
 sequenceDiagram
-    participant User as Claude Desktop
+    participant User as MCP client
     participant MCP as @roam-research/roam-mcp
+    participant Local as @roam-research/roam-tools-local
     participant Core as @roam-research/roam-tools-core
     participant Roam as Roam Desktop App
 
-    User->>MCP: Tool call: search({ query: "meeting notes", graph: "work" })
-    MCP->>Core: routeToolCall("search", { query: "meeting notes", graph: "work" })
-    Core->>Core: resolveGraph("work") → reads ~/.roam-tools.json
-    Core->>Core: new RoamClient({ graphName, token, type })
-    Core->>Roam: POST http://127.0.0.1:3333/api/my-workspace
-    Roam-->>Core: { success: true, result: [...] }
-    Core-->>MCP: { content: [{ type: "text", text: "..." }] }
-    MCP-->>User: MCP tool result with search results
+    User->>MCP: tools/call search({ query, graph })
+    MCP->>Local: routeToolCall("search", args)
+    Local->>Local: resolveGraph(graph) from ~/.roam-tools.json
+    Local->>Local: create RoamClient(token, graphName, port)
+    Local->>Core: routeToolCall("search", args, injected defaults)
+    Core->>Roam: client.call("data.ai.search", ...)
+    Roam-->>Core: { success: true, result }
+    Core-->>MCP: MCP CallToolResult
+    MCP-->>User: tool result
 ```
 
-The CLI follows the exact same path — `roam search --query "meeting notes" --graph work` enters through Commander instead of MCP stdio.
+Hosted transports take the other branch: they import `dataTools` and `routeToolCall` from core, register only transport-safe tools, and provide their own `resolveGraph` and `createClient`.
 
 ## Why `@roam-research/roam-mcp`
 
 ### npx resolution for scoped packages
 
-When you run `npx @scope/name`, npm resolves the binary by matching the **unscoped portion** (`name`) against the package's `bin` entries. If it finds a match, it runs that binary.
+When you run `npx @scope/name`, npm resolves the binary by matching the unscoped portion (`name`) against the package's `bin` entries. If it finds a match, it runs that binary.
 
 - Package: `@roam-research/roam-mcp`
 - npx looks for bin: `roam-mcp`
-- Found → starts MCP server
+- Found -> starts MCP server
 
 This means MCP client configuration is clean and predictable:
 
@@ -86,65 +100,67 @@ No `-p` flag. No explicit binary selection. No ambiguity.
 Same npx resolution logic:
 
 - Package: `@roam-research/roam-cli`
-- npx looks for bin: `roam-cli`... no match
-- But bin field has `roam` and it's the only bin, so npx resolves it
+- npx looks for bin: `roam-cli`, finds no match
+- The package has a single `roam` bin, so npx resolves it
 
 ```bash
 npx @roam-research/roam-cli connect
 ```
 
-## Why Two Separate Binaries (Not a Unified Entry Point)
+## Why Two Separate Binaries
 
-We considered a single binary where no-args starts the MCP server and subcommands run the CLI. We rejected this because:
+We considered a single binary where no args starts the MCP server and subcommands run the CLI. We rejected this because:
 
-- **`roam` with no arguments should not silently start an MCP server.** It should show help, a wizard, or usage info. The "default" behavior of a CLI tool should be helpful to humans.
-- **Future CLI evolution.** The `roam` command may grow to include interactive features (TUI, background daemon, etc.) that would conflict with MCP server mode.
-- **Explicit is better.** `roam-mcp` starts the server. `roam` is the CLI. No ambiguity about what each command does.
+- `roam` with no arguments should not silently start an MCP server. A human-facing CLI should show help, a wizard, or usage information.
+- Future CLI features such as interactive views or background state would conflict with MCP server mode.
+- `roam-mcp` starts the server; `roam` is the CLI. Each command has one obvious role.
 
 ## Development Mode
 
-In a monorepo, the MCP and CLI packages import from `@roam-research/roam-tools-core`. In production, that resolves to compiled JavaScript in `dist/`. But during development, you don't want to rebuild core every time you change a file.
+The packages use Node.js export conditions so development commands can run TypeScript source without rebuilding after every change:
 
-The solution uses Node.js **export conditions**:
-
-```
-                        ┌──────────────────────────────────────┐
-                        │   @roam-research/roam-tools-core     │
-                        │   package.json "exports":            │
-                        │                                      │
-                        │   "development" → ./src/index.ts     │
- tsx --conditions       │   "import"      → ./dist/index.js    │
- development            └────────┬─────────────────┬───────────┘
-                                 │                 │
-                    Dev mode resolves here    Prod resolves here
-                    (TypeScript source)      (compiled JS)
+```text
+@roam-research/roam-tools-core
+@roam-research/roam-tools-local
+  package.json "exports":
+    "development" -> ./src/*.ts
+    "import"      -> ./dist/*.js
 ```
 
-When you run `npm run mcp` (which uses `tsx --conditions development`), Node resolves the import to raw TypeScript source. `tsx` transpiles it on the fly. No build step needed during development. Changes are picked up on next restart without rebuilding.
+`npm run mcp` and `npm run cli` use `tsx --conditions development`, so imports of sibling packages resolve to source TypeScript. Production installs resolve to compiled JavaScript in `dist/`.
+
+Build order is still enforced by TypeScript project references: core -> local -> MCP + CLI.
 
 ## Design Decisions
 
 ### Why core depends on the MCP SDK
 
-The core package re-exports MCP types like `CallToolResult` that are used in tool definitions. The SDK is needed for these type imports, not for server functionality. Only the MCP package actually creates an `McpServer` or uses the stdio transport.
+Core re-exports MCP result types like `CallToolResult` because tool definitions and operations return MCP-shaped content. The SDK is needed for these type imports and result shapes, not because core creates an MCP server. Only `packages/mcp` creates an `McpServer` or uses the stdio transport.
 
-### The `./connect` entry point
+### The local `./connect` entry point
 
-The `connect` module (interactive graph setup, token exchange) lives in core so both MCP and CLI can share it. It's exposed as a **separate export entry point** (`@roam-research/roam-tools-core/connect`), not part of the main barrel — so `@inquirer/prompts` is only loaded when `connect` is explicitly imported, never during normal MCP server operation.
+The setup flow lives in `@roam-research/roam-tools-local/connect`, not in core. Both binaries use the same flow:
 
-The MCP binary dynamically imports connect (`await import("@roam-research/roam-tools-core/connect")`) only when `roam-mcp connect` is invoked, then exits before the MCP server code runs. The CLI statically imports it since CLI users expect prompt dependencies to be present.
+- `roam-mcp connect` dynamically imports `@roam-research/roam-tools-local/connect`, runs setup, then exits before server startup.
+- `roam connect` imports the same function from the CLI entrypoint.
 
-### Why pinned core dependency versions
+This keeps `@inquirer/prompts` out of the normal MCP server path while keeping setup behavior shared.
 
-The core dependency in MCP and CLI is pinned (`"0.4.0"`, not `"^0.4.0"`) because all three packages always release together at the same version. A semver range would suggest that MCP v0.5.0 could work with core v0.4.0, which isn't tested or guaranteed.
+### Why pinned sibling dependency versions
+
+`@roam-research/roam-tools-local` pins core exactly, and `@roam-research/roam-mcp` / `@roam-research/roam-cli` pin local exactly. These packages are tested and released in lockstep when they are published together; semver ranges would allow untested sibling combinations.
+
+This is separate from the hosted transport's dependency on core. The hosted MCP intentionally uses a caret range for `@roam-research/roam-tools-core`, which is why core patch releases must remain contract-safe.
 
 ### Alternatives considered
 
-**Single package with subpath exports** — keep one `@roam-research/roam-mcp` package but expose multiple entry points. Simpler (one publish, one version), but bloated installs (everyone downloads all dependencies), confusing npm listing (is this an MCP server or a CLI?), and core can't be used independently.
+**Single package with subpath exports** — simpler publishing, but larger installs, less clear npm identity, and no clean way for a hosted transport to depend only on transport-agnostic code.
 
-**Separate git repositories** — three repos with core published as a standalone package. True independence, but cross-repo changes are painful (core change requires publish + update in MCP and CLI), no shared development mode trick, and version drift between packages.
+**Three packages with local transport in core** — the original split, but it made core carry `RoamClient`, config-file I/O, and setup dependencies that a hosted transport should not bundle.
 
-**Monorepo (chosen)** — clean package boundaries with shared development workflow. The main cost is version coordination across 7 locations, handled by `scripts/bump-version.mjs`.
+**Separate git repositories** — true independence, but cross-package changes become publish-and-update choreography with more version drift risk.
+
+**Four-package monorepo (current)** — clear transport boundary with shared development workflow. The main cost is version coordination across the package versions, sibling dependency pins, and binary version strings, handled by `scripts/bump-version.mjs`.
 
 ## Usage
 
@@ -175,7 +191,7 @@ npm install -g @roam-research/roam-mcp    # MCP server
 npm install -g @roam-research/roam-cli    # CLI
 ```
 
-### From Source (development)
+### From Source
 
 ```bash
 git clone https://github.com/Roam-Research/roam-tools.git
@@ -188,31 +204,18 @@ npm run cli -- connect              # CLI (dev mode)
 
 ## Config Versioning
 
-The `~/.roam-tools.json` config file includes a `version` field (default: 1). When a client reads a config with a higher version than it supports, it throws a clear "please update" error before Zod validation. This prevents confusing schema validation errors when a newer tool has changed the config format.
+The `~/.roam-tools.json` config file includes a `version` field (default: 1). When the local transport reads a config with a higher version than it supports, it throws a clear "please update" error before Zod validation. This prevents confusing schema validation errors when a newer tool has changed the config format.
 
 ## Releasing a New Version
 
-### 1. Bump the version
+Use the version scripts documented in `CLAUDE.md`; they are the source of truth for the current list of version locations.
 
 ```bash
-npm run version:bump 0.5.0    # Updates all 7 locations
-npm install                    # Sync package-lock.json
+npm run version:bump 0.6.5
+npm install
+npm run version:check
+npm run build
+npm run typecheck
 ```
 
-### 2. Verify
-
-```bash
-npm run version:check    # Ensure all versions are consistent
-npm run build            # Build all packages
-npm run typecheck        # Type-check
-```
-
-### 3. Commit and publish
-
-```bash
-git add -A && git commit -m "bump version to X.Y.Z"
-git push origin master
-npm run publish:all
-```
-
-This runs version:check, builds, then publishes core → mcp → cli in order.
+`npm run publish:all` runs `version:check`, builds, then publishes core -> local -> MCP -> CLI.

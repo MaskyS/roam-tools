@@ -1,0 +1,216 @@
+# Architecture & the remote-MCP contract
+
+> **Audience:** anyone (human or agent) modifying this repo. Read this before changing anything in `packages/core`.
+> **Why it exists:** `@roam-research/roam-tools-core` is consumed not only by the local packages in this repo but by a **separate, private hosted MCP server** that pins core over npm. That hosted consumer is not in this tree, so it's easy to break it without noticing. This doc explains how the packages divide responsibility, where the transports differ, and the rules that keep a core change from silently breaking the hosted MCP.
+> **Scope:** this is an inward-facing architecture doc. It deliberately describes only **core's public contract** and treats the hosted server abstractly — none of the hosted server's backend internals live here. For version-bump mechanics, see `CLAUDE.md`; for release history, see `CHANGELOG.md`.
+
+---
+
+## 1. The four packages
+
+```
+packages/
+  core/   → @roam-research/roam-tools-core    transport-agnostic library
+  local/  → @roam-research/roam-tools-local    local Roam Desktop transport (depends on core)
+  mcp/    → @roam-research/roam-mcp     (bin: roam-mcp)   MCP server (depends on local)
+  cli/    → @roam-research/roam-cli      (bin: roam)      CLI (depends on local)
+```
+
+Dependency chain: **`core → local → {mcp, cli}`** (enforced by TypeScript project references).
+
+| Package       | Knows about                                                                                                | Must NOT know about                                                                       |
+| ------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `core`        | types, Zod schemas, the tool registry, operation functions, the `routeToolCall` dispatcher                 | local files, ports, the Roam Desktop API, `~/.roam-tools.json`, `@inquirer/prompts`, `fs` |
+| `local`       | the Roam Desktop transport: `RoamClient`, `~/.roam-tools.json` reader, `connect`, the two standalone tools | —                                                                                         |
+| `mcp` / `cli` | wiring `local` to a transport (stdio MCP / Commander)                                                      | core directly (they import from `local`)                                                  |
+
+**Why the split exists:** so a hosted MCP server (a separate, private repo) can depend on `core` **alone** and inject its own graph resolver + its own authenticated client, without dragging in any of the local-Desktop code. Everything below follows from that goal.
+
+**Lean-dependency invariant:** `core` depends only on `@modelcontextprotocol/sdk` + `zod` (no `fs`, `@inquirer/prompts`, or `open`) and runs on Node 18+. A hosted consumer bundles `core`, so a stray local-only dependency would leak into its bundle — keeping this dep set lean is part of the split (see the §6 rule against importing local-only deps into core).
+
+---
+
+## 2. The transport-agnostic contract (`core`'s public surface)
+
+This is the seam external consumers depend on. Treat every symbol the hosted consumer imports as a **published contract** — changing it can break a consumer you can't see. Defined in `packages/core/src/{types,tools,index}.ts`; re-exported from `packages/core/src/index.ts`.
+
+The sections below name the load-bearing exports; **`packages/core/src/index.ts` is the authoritative full list** (it also exports the `CallToolResult` builders `textResult` / `imageResult` / `errorResult`, `getErrorMessage`, and `GraphConfigSchema` / `RoamMcpConfigSchema`). The hosted consumer's installed-package smoke tests also import `EXPECTED_API_VERSION`, `desktopUiTools`, and `defineStandaloneTool`, even though runtime registration uses `dataTools` only. Per §6, removing or renaming **any** barrel export is a breaking change.
+
+### 2a. The dispatcher
+
+```ts
+function routeToolCall(
+  toolName: string,
+  args: Record<string, unknown>,
+  options: RouteToolCallOptions, // required — no default
+): Promise<CallToolResult>;
+
+interface RouteToolCallOptions {
+  resolveGraph: (providedGraph?: string) => Promise<ToolGraph>;            // REQUIRED
+  createClient: (graph: ToolGraph) => Promise<RoamActionClient> | RoamActionClient; // REQUIRED
+  tokenInfoMode?: "local-sync" | "skip";                                   // default "skip"
+  onTokenStatusUpdate?: (nickname: string, patch: {...}) => Promise<void>; // only used in local-sync
+}
+```
+
+What it does, in order (`packages/core/src/tools.ts`): find the tool → **reject standalone tools** (throws; core only routes `client` tools) → validate `args` against the tool's Zod schema → strip the `graph` field out of args → `resolveGraph(graphArg)` → `createClient(graph)` → (only for `get_graph_guidelines` **and** `tokenInfoMode === "local-sync"` **and** `client.getTokenInfo` present: run the token-info side flow) → otherwise `tool.action(client, restArgs)` → on success, `prependGraphInfo` → wrap any thrown `RoamError` into the structured error result.
+
+### 2b. The interfaces a consumer implements / receives
+
+```ts
+interface RoamActionClient {
+  call<T = unknown>(action: string, args?: unknown[]): Promise<RoamResponse<T>>;
+  getTokenInfo?(): Promise<TokenInfoResult>; // optional; only the local transport implements it
+}
+
+interface ToolGraph {
+  name: string; // canonical graph name (the transport uses this to address the graph)
+  type: GraphType; // "hosted" | "offline"
+  nickname: string; // result prefix, and local-sync uses it as the token-status update key
+  accessLevel?: AccessLevel; // "read-only" | "read-append" | "full"
+  token?: string; // local-only; a hosted resolver omits it
+}
+
+interface ResolvedGraph extends ToolGraph {
+  token: string;
+  lastKnownTokenStatus?: "active" | "revoked";
+}
+
+class RoamError extends Error {
+  constructor(message: string, code?: ErrorCode | (string & {}), context?: Record<string, unknown>);
+}
+```
+
+`RoamResponse<T>` (`{ success, result?, error?, apiVersion?, expectedApiVersion? }`) is what `call()` returns; `RoamApiError` is `{ message, code? }`.
+
+### 2c. `ErrorCodes` — a recommended vocabulary, not a hard contract
+
+`ErrorCodes` (26 members today) exists for IDE autocomplete and cross-package consistency. Since the `RoamError.code` type is `ErrorCode | (string & {})`, **any string is a valid code at runtime** — a transport may emit codes core has never heard of. Two consequences:
+
+- Core must **never validate** an incoming code against the `ErrorCodes` enum.
+- **Adding** a member is additive/safe; **removing or renaming** one is a breaking change (TS consumers narrow on the literals — e.g. `mcp` on `CONFIG_TOO_NEW`, `cli` on `GRAPH_NOT_SELECTED`).
+
+### 2d. The tool registry
+
+| Export                                           | Contents                                                                                                                                                                          |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dataTools`                                      | 17 graph-content tools — **transport-neutral** (they only call `client.call(...)`). This is what a hosted consumer registers.                                                     |
+| `desktopUiTools`                                 | 7 tools that assume a local Desktop / filesystem (`get_open_windows`, `get_selection`, `open_main_window`, `open_sidebar`, `file_get`, `file_upload`, `file_delete`). Local-only. |
+| `contentTools` / `tools`                         | `[...dataTools, ...desktopUiTools]`.                                                                                                                                              |
+| `findTool`, `defineTool`, `defineStandaloneTool` | registry helpers. `defineTool` runs `withGraph` to add the optional `graph` param to every client tool.                                                                           |
+
+`withGraph`'s `graph` param description is intentionally transport-neutral: _"Graph to act on, by nickname or name. Optional — if only one graph is available, it is used automatically."_ — it must not assume local-only concepts.
+
+### 2e. Constants & result behavior
+
+- `EXPECTED_API_VERSION` (`"1.1.2"`) — sent on every backend call; the backend compares **major.minor** exactly (patch ignored). Consumers read it from core, never hardcode.
+- `CONFIG_VERSION` (`1`).
+- `prependGraphInfo` prepends `"Roam graph: ${nickname}\n\n"` to the first text block of every successful client-tool result. `GUIDELINES_NOTE` is appended to client-tool descriptions to nudge `get_graph_guidelines`.
+
+### 2f. Client conventions & the error envelope
+
+Any `RoamActionClient` implementation must follow two conventions, because the operation functions and the dispatcher assume them:
+
+- **`call()` contract.** On success, return `{ success: true, result }` — operation functions read `result` and build the `CallToolResult`. On failure, **throw `RoamError(message, code?, context?)` — never return `{ success: false }`.** (The `{ success: false }` shape is the Roam-API wire envelope, not the JS-throwable convention core's operations expect.)
+- **Error envelope.** When core catches a thrown `RoamError`, it produces:
+
+  ```jsonc
+  {
+    "content": [
+      { "type": "text", "text": "{ \"error\": { \"code\": ..., \"message\": ..., ...context } }" },
+    ],
+    "isError": true,
+  }
+  ```
+
+  The `RoamError`'s `context` keys are **spread into** the `error` object (e.g. `available_graphs`, `request_id`), so the agent sees them. A `RoamError` thrown anywhere in an operation or a client surfaces this way.
+
+---
+
+## 3. How `local` specializes `core`
+
+`packages/local/src/index.ts` re-exports core's surface **but shadows** `tools`, `findTool`, and `routeToolCall` with local versions (it deliberately does **not** re-export those three from core). The local `routeToolCall` wrapper (`packages/local/src/tools.ts`):
+
+1. Dispatches the two **standalone** tools — `list_graphs`, `setup_new_graph` (`graphManagementTools`) — directly, since core doesn't know about them.
+2. Delegates client tools to core's `routeToolCall`, filling in local defaults: `defaultResolveGraph` (reads `~/.roam-tools.json`), `defaultCreateClient` (builds a `RoamClient` from `graph.token` + the discovered port), `tokenInfoMode: "local-sync"`, and `onTokenStatusUpdate: updateGraphTokenStatus`.
+
+`RoamClient` (`packages/local/src/client.ts`) implements `RoamActionClient` **and** `getTokenInfo` (which is why the local-sync side flow fires for it). `mcp` sets a server `instructions` field steering clients through `list_graphs` → `get_graph_guidelines`, and exits on `CONFIG_TOO_NEW`; `cli` prints available graphs on `GRAPH_NOT_SELECTED`.
+
+---
+
+## 4. How a hosted transport consumes `core`
+
+The hosted MCP server lives in a separate, private repo and is **not** in this tree. From core's perspective it is just another consumer of the §2 contract. At a high level it:
+
+- Imports `dataTools`, `routeToolCall`, `RoamError`, `ErrorCodes`, and the `RoamActionClient` / `ToolGraph` types from `core`. Its installed-package tests also guard `EXPECTED_API_VERSION`, `desktopUiTools`, and `defineStandaloneTool`.
+- Registers **`dataTools` only** (omits `desktopUiTools` — remote contexts have no local window/filesystem).
+- Injects its **own** `resolveGraph` (backed by its own grant store, not `~/.roam-tools.json`) and its **own** client (its own auth, not a local token).
+- Passes `tokenInfoMode: "skip"` and does **not** implement `getTokenInfo` — so the `get_graph_guidelines` side flow never fires.
+- Authors its **own** `list_graphs` / `setup_new_graph` standalone tools and registers them directly with the MCP SDK. (They can't go through `routeToolCall`, which throws on standalone tools.)
+- Pins core with a **caret range** (`^0.6.x`).
+
+That caret is the crux of §6: anything we ship in a `0.6.x` patch reaches the hosted server automatically.
+
+---
+
+## 5. Cross-transport discrepancies
+
+Real, intentional differences. Keep them in mind when reasoning about behavior or writing copy.
+
+| Aspect                      | Local (`roam-tools-local`)             | Hosted (separate repo)                      | Core's stance                                                                                                                                        |
+| --------------------------- | -------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **nickname**                | **Required** (kebab-case schema field) | **Optional** (falls back to the graph name) | Core requires a value for result prefixes; local-sync also passes it to `onTokenStatusUpdate`; hosted resolvers set it to the graph name when absent |
+| **`graph` param**           | accepts nickname **or** name           | accepts nickname **or** name                | the param is the same string either way                                                                                                              |
+| **resolution lookup order** | nickname → name                        | name → nickname                             | core doesn't resolve; the injected `resolveGraph` does                                                                                               |
+| **`tokenInfoMode` default** | `"local-sync"` (local wrapper sets it) | `"skip"`                                    | core's own default is `"skip"`                                                                                                                       |
+| **`getTokenInfo`**          | implemented (`RoamClient`)             | not implemented                             | optional on the interface                                                                                                                            |
+| **standalone tools**        | `graphManagementTools` (2)             | authors its own                             | core has none                                                                                                                                        |
+| **error codes**             | emits a subset of `ErrorCodes`         | passes its backend's codes through verbatim | `RoamError.code` accepts arbitrary strings since 0.6.2                                                                                               |
+
+---
+
+## 6. How to change this repo without breaking the remote MCP
+
+**The load-bearing fact:** the hosted consumer pins core with a **caret** (`^0.6.x`). So **any `0.6.x` patch we publish reaches it automatically, with no review on their side.** SemVer discipline on `core` is therefore a safety mechanism, not a formality.
+
+### What each bump level is allowed to contain
+
+- **Patch (`0.6.x`)** — behavior-preserving only: docs, tests, type-only changes, and **copy** (tool/param descriptions).
+  - ⚠️ Tool and parameter **descriptions are part of `dataTools`** and ship straight to the hosted agent. So "just copy" still reaches a different transport — keep it **transport-neutral** (no local-isms like "configured"; prefer "available"). The recent neutralizing of the `graph` param description is the model here.
+- **Minor (`0.7.0`)** — additive only: new exports; new tools that are **transport-safe**; new **optional** `RouteToolCallOptions` fields with safe defaults. A new local-only tool must go in `desktopUiTools` (which the hosted side omits) or stay a standalone in `local` — never in `dataTools`.
+- **Major (`1.0.0`)** — anything that changes or removes existing behavior (see the checklist).
+
+### Don't-break checklist (a change needs a minor or major bump if it does any of these)
+
+- Adds a **required** field to `RouteToolCallOptions`, or changes `resolveGraph` / `createClient` signatures, or changes the dispatch contract (rejecting standalones, stripping `graph`, `prependGraphInfo`).
+- Removes or renames a core barrel export: `dataTools`, `desktopUiTools`, `routeToolCall`, `defineStandaloneTool`, `RoamError`, `ErrorCodes`, `RoamActionClient`, `ToolGraph`, `EXPECTED_API_VERSION`, the result/type helpers.
+- Changes the shape of `ToolGraph`, `RoamActionClient`, `RoamResponse`, `RoamApiError`, or `RoamError`.
+- Removes or renames an `ErrorCodes` member (adding one is safe). Also: never validate a code against the enum — the hosted transport emits codes core doesn't know.
+- Adds a tool to `dataTools` that assumes local-only capabilities (filesystem / Desktop UI). It would reach the hosted agent and fail.
+- Tightens a `dataTool`'s Zod schema in a patch — renaming/removing an arg, or flipping optional → required. Hosted agents call these schemas.
+- Makes `withGraph`'s `graph` param required, or re-bakes a local assumption into its description.
+- Imports a local-only dependency (`fs`, `@inquirer/prompts`, `RoamClient`, the config reader) into `core` — this defeats the whole split and would break the hosted bundle.
+- Changes `EXPECTED_API_VERSION`'s major.minor — that's a real wire-compatibility change with the backend, not a cosmetic bump.
+- Introduces a caret/tilde dep range in `mcp`'s or `cli`'s `package.json` for a sibling `@roam-research/*` package — `bump-version.mjs` writes **exact** pins on purpose (see the exact sibling-pin invariant in `CLAUDE.md`).
+
+### Before shipping a `core` change
+
+1. `npm run typecheck && npm run lint && npm run build` and both workspace test suites.
+2. Classify the change as patch / minor / major using the rules above. If it's beyond a patch, the hosted consumer should not pick it up silently — coordinate before publishing.
+
+---
+
+## 7. Relationship to `CLAUDE.md`
+
+`CLAUDE.md` owns the **version-bump mechanics** (the 9 locations, `bump-version.mjs` / `check-versions.mjs`) and the exact sibling-pin invariant. `CHANGELOG.md` owns release history. This doc owns the **contract** and the **don't-break rules**. When they touch the same idea (exact pins, SemVer), this doc points at `CLAUDE.md` rather than restating it.
+
+---
+
+## 8. Open questions (feedback welcome)
+
+1. **Internal infra references in committed core (resolved).** Core's source comments and the published package READMEs previously named the hosted backend's internal infrastructure; these have been neutralized to transport-agnostic descriptions so the open-source repo stays clean.
+2. **No automated guard on the contract.** Nothing today stops a `0.6.x` patch from breaking the caret-pinned hosted consumer. Worth adding a public-surface snapshot test (e.g. a checked-in `index.d.ts` snapshot, or an api-extractor report) that fails CI on an unintended surface change?
+3. **Documented SemVer policy.** Should `core`'s README / `package.json` state the patch/minor/major policy from §6 explicitly, so _all_ consumers (not just the hosted one) know what a caret range buys them?
+4. **Caret vs exact on the hosted side.** The hosted consumer pins `^0.6.x`, so patches land unreviewed. Keep the caret and rely on strict patch discipline, or ask the hosted side to pin exact and adopt deliberately?
+5. **Terminology.** Is "the hosted MCP / hosted transport (a separate, private repo)" the right abstract label to use throughout, or do you have a preferred non-sensitive name?
+6. **`EXPECTED_API_VERSION` coupling.** Anything this doc should say about whether/where the hosted path enforces the version field — without reaching into backend specifics?

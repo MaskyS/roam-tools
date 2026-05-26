@@ -1,4 +1,3 @@
-// src/core/graph-resolver.ts
 // Stateless config-based graph resolution with token authentication
 
 import { readFile, writeFile, chmod, stat } from "fs/promises";
@@ -13,7 +12,7 @@ import {
   ErrorCodes,
   AccessLevel,
   CONFIG_VERSION,
-} from "./types.js";
+} from "@roam-research/roam-tools-core";
 
 // Warning suppression flags (prevent spamming on every tool call)
 let permissionCheckDone = false;
@@ -377,12 +376,12 @@ export async function resolveGraph(providedGraph?: string): Promise<ResolvedGrap
     const graphConfig = await findGraphConfig(providedGraph);
     if (!graphConfig) {
       throw new RoamError(
-        `Graph "${providedGraph}" not found in config. Available graph nicknames are listed below.`,
+        `Graph "${providedGraph}" not found in config. Available graphs are listed below.`,
         ErrorCodes.GRAPH_NOT_CONFIGURED,
         {
           available_graphs: await getConfiguredGraphs(),
           instruction:
-            "Pass the 'nickname' value as the graph parameter. After identifying which graph to use, ALWAYS call get_graph_guidelines next — it returns essential context and orientation for the session.",
+            "Pass the graph's nickname or name as the graph parameter. Once you've picked one, call get_graph_guidelines for that graph — it returns the user's setup (naming conventions, structural preferences, orientation actions). Skip it and you may operate on assumptions the user has already overridden.",
         },
       );
     }
@@ -411,12 +410,12 @@ export async function resolveGraph(providedGraph?: string): Promise<ResolvedGrap
 
   // 3. Multiple graphs - require explicit selection
   throw new RoamError(
-    "Multiple graphs configured. Pass a graph nickname as the graph parameter to specify which graph to use.",
+    "Multiple graphs configured. Pass a graph nickname or name as the graph parameter to specify which graph to use.",
     ErrorCodes.GRAPH_NOT_SELECTED,
     {
       available_graphs: await getConfiguredGraphs(),
       instruction:
-        "Pass the 'nickname' value as the graph parameter. After identifying which graph to use, ALWAYS call get_graph_guidelines next — it returns essential context and orientation for the session.",
+        "Pass the graph's nickname or name as the graph parameter. Once you've picked one, call get_graph_guidelines for that graph — it returns the user's setup (naming conventions, structural preferences, orientation actions). Skip it and you may operate on assumptions the user has already overridden.",
     },
   );
 }
