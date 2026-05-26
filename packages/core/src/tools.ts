@@ -403,13 +403,13 @@ export interface RouteToolCallOptions {
   /**
    * Resolve a graph identifier (nickname/name) to a ToolGraph. Required.
    * Local consumers use the resolver from @roam-research/roam-tools-local;
-   * hosted consumers wire their own (e.g., reading picker grants from RTDB).
+   * hosted consumers wire their own (e.g., reading grants from their own store).
    */
   resolveGraph: (providedGraph?: string) => Promise<ToolGraph>;
   /**
    * Construct a client for the resolved graph. Required.
    * Local consumers return a RoamClient; hosted consumers return a transport
-   * that talks to proxy.api.roamresearch.com.
+   * that talks to their own backend.
    */
   createClient: (graph: ToolGraph) => Promise<RoamActionClient> | RoamActionClient;
   /**

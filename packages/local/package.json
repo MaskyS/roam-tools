@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "@roam-research/roam-tools-core": "0.6.4",
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "@inquirer/prompts": "^8.2.0",
     "open": "^11.0.0",
     "zod": "^3.25.76"

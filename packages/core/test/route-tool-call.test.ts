@@ -3,7 +3,7 @@ import { routeToolCall } from "../src/tools.js";
 
 // Core's routeToolCall has no defaults — it requires resolveGraph + createClient
 // in every call. These tests verify the contract that hosted MCP transports
-// (like the one in relemma/functions_ts) rely on. The local-defaults wrapper
+// rely on. The local-defaults wrapper
 // is tested in @roam-research/roam-tools-local's own test file.
 
 // ---------------------------------------------------------------------------

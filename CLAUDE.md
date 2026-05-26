@@ -54,7 +54,7 @@ Only `@roam-research/roam-tools-core` is currently on npm. Timeline:
 - **0.6.3** shipped **2026-05-20** (trimmed `GUIDELINES_NOTE` — the orientation note appended to every client tool description — to a quiet, transport-neutral one-liner, dropping the "roam mcp tool …" phrasing that misread in CLI/hosted contexts. **Published `core@0.6.3` contains only this description change.** The same commit also added an MCP server `instructions` field in `packages/mcp/src/index.ts` to steer clients through `list_graphs` → `get_graph_guidelines`, but that lives in the unpublished `roam-mcp` package — it is NOT part of published core.)
 - **0.6.4** shipped **2026-05-23** (copy-text only, in `packages/core/src/tools.ts`: reworded the `graph` param `.describe()`, rewrote `GUIDELINES_NOTE` again as a parenthetical nudge, and expanded the `get_graph_guidelines` tool description — all to get agents to fetch guidelines more reliably. **Published `core@0.6.4` contains only these `tools.ts` description changes.** Sibling commits touched `packages/local/src/{graph-resolver,operations/graphs}.ts` and docs, neither of which is in published core.)
 
-`@roam-research/roam-tools-local` has never been published to npm at all (the working tree carries it; no public surface). `@roam-research/roam-mcp` and `@roam-research/roam-cli` remain at `0.5.1` on npm even though the working tree has them at 0.6.x in lockstep. This lets the hosted MCP in `relemma/functions_ts` integrate against the new transport-agnostic core without affecting local users. When hosted integration is proven, a future bump publishes all four packages together via `npm run publish:all`.
+`@roam-research/roam-tools-local` has never been published to npm at all (the working tree carries it; no public surface). `@roam-research/roam-mcp` and `@roam-research/roam-cli` remain at `0.5.1` on npm even though the working tree has them at 0.6.x in lockstep. This lets the hosted MCP (a separate, private repo) integrate against the new transport-agnostic core without affecting local users. When hosted integration is proven, a future bump publishes all four packages together via `npm run publish:all`.
 
 **Why the partial publish is safe (verified 2026-04-25 via `npm view`; invariant unchanged through 0.6.4):** every published `roam-mcp` and `roam-cli` version uses an **exact pin** to a specific `core` version — no caret, no tilde, no range. This is the load-bearing invariant. The full audit:
 
@@ -75,7 +75,7 @@ Implication: `npx roam-mcp@latest` resolves to `roam-mcp@0.5.1` → `core@0.5.1`
 
 - **Since `core@0.6.2`**: `RoamError.code` accepts arbitrary strings (`ErrorCode | (string & {})`), not just the enum members. The `(string & {})` branded-string intersection preserves IDE autocomplete on known `ErrorCodes.X` literals while accepting any string at runtime.
 - **`ErrorCodes` is a recommended vocabulary, not a contract**. It exists for IDE autocomplete, cross-package consistency, and the local-transport `case` matches in `RoamClient.handleApiError`. New codes can be added by PR (optional, not required).
-- **For the cloud transport**: codes emitted by the relemma backend pass through verbatim — `relemma/src/common/relemma/common/api/mcp_error_codes.cljc` is the source of truth for cloud-emitted codes. A new Clojure-side code reaches the agent's JSON envelope without any TS-side coordination.
+- **For the cloud transport**: codes emitted by the hosted backend pass through verbatim — the hosted transport's backend is the source of truth for cloud-emitted codes. A new backend-side code reaches the agent's JSON envelope without any TS-side coordination.
 - **For the local transport**: `RoamClient` in `packages/local/src/client.ts` keeps using `ErrorCodes.X` constants for its own emissions (`VERSION_MISMATCH`, `UNKNOWN_ACTION`, `INTERNAL_ERROR`, `CONNECTION_FAILED`) and for the 401/403 paths where Electron's code is passed through directly (the `as any` casts that bypassed the strict type were removed in `0.6.2`).
 - **Two TS-only consumer call sites** still narrow on specific codes: `packages/mcp/src/index.ts:104` (`error.code === ErrorCodes.CONFIG_TOO_NEW`) and `packages/cli/src/index.ts:153` (`error.code === ErrorCodes.GRAPH_NOT_SELECTED`). Both continue to work after widening — TypeScript preserves runtime equality and literal narrowing.
 
@@ -92,7 +92,7 @@ This is a monorepo with four npm packages for Roam Research tools:
 | `@roam-research/roam-mcp`         | `roam-mcp` | MCP server (consumes local)                                           |
 | `@roam-research/roam-cli`         | `roam`     | CLI (consumes local)                                                  |
 
-The split exists so a hosted MCP transport (in a separate repo, `relemma/functions_ts`) can depend on `roam-tools-core` directly and inject its own graph resolver + WorkOS-authenticated client without dragging the local-Desktop-API code along.
+The split exists so a hosted MCP transport (in a separate, private repo) can depend on `roam-tools-core` directly and inject its own graph resolver + authenticated client without dragging the local-Desktop-API code along.
 
 ### Entry Points
 
@@ -115,7 +115,7 @@ Transport-agnostic. Knows nothing about local files, ports, or Roam Desktop. Hos
   - `defineTool`, `defineStandaloneTool` (helpers for downstream consumers)
 
 - `types.ts` - TypeScript types, Zod schemas for config validation, error codes and `RoamError` class. Notably defines:
-  - `RoamActionClient` — structural client interface (`call()` + optional `getTokenInfo()`); both `RoamClient` (in local) and a hosted `RoamCloudClient` (out-of-repo) satisfy it.
+  - `RoamActionClient` — structural client interface (`call()` + optional `getTokenInfo()`); both `RoamClient` (in local) and a hosted client (out-of-repo) satisfy it.
   - `ToolGraph` — cross-transport graph identity (`name, type, nickname, optional accessLevel + token`).
   - `ResolvedGraph extends ToolGraph` — adds required `token` and the local-only `lastKnownTokenStatus`.
 

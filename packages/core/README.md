@@ -6,7 +6,7 @@ The official transport-agnostic core for Roam Research's MCP and CLI tools. Prov
 
 ## Who is this for?
 
-This package is for **hosted MCP transports** that talk to Roam through a different backend (e.g., a WorkOS-authenticated proxy) and want to reuse the same tool registry, Zod schemas, and operation functions without dragging in the local Roam Desktop client or the `~/.roam-tools.json` config reader.
+This package is for **hosted MCP transports** that talk to Roam through a different backend (e.g., an authenticated proxy) and want to reuse the same tool registry, Zod schemas, and operation functions without dragging in the local Roam Desktop client or the `~/.roam-tools.json` config reader.
 
 ## What's in here
 
@@ -25,7 +25,7 @@ This package is for **hosted MCP transports** that talk to Roam through a differ
 - `connect` interactive setup — also in `@roam-research/roam-tools-local`.
 - The `list_graphs` and `setup_new_graph` standalone tools — also local.
 
-Hosted consumers reimplement these (or substitute their own equivalents — e.g., reading picker grants from a remote store) and inject them via `routeToolCall`'s options.
+Hosted consumers reimplement these (or substitute their own equivalents — e.g., reading grants from a remote store) and inject them via `routeToolCall`'s options.
 
 ## Documentation
 

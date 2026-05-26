@@ -208,7 +208,7 @@ Real, intentional differences. Keep them in mind when reasoning about behavior o
 
 ## 8. Open questions (feedback welcome)
 
-1. **Already-shipped references in committed core.** `packages/core/src/types.ts`'s `ErrorCodes` comments already name the hosted consumer's repo, its backend host, and "AWS Clojure backend." Given we chose a contract-only policy for this doc, do you want a follow-up PR to scrub those comments so the open-source repo stays clean — or are they acceptable where they are?
+1. **Internal infra references in committed core (resolved).** Core's source comments and the published package READMEs previously named the hosted backend's internal infrastructure; these have been neutralized to transport-agnostic descriptions so the open-source repo stays clean.
 2. **No automated guard on the contract.** Nothing today stops a `0.6.x` patch from breaking the caret-pinned hosted consumer. Worth adding a public-surface snapshot test (e.g. a checked-in `index.d.ts` snapshot, or an api-extractor report) that fails CI on an unintended surface change?
 3. **Documented SemVer policy.** Should `core`'s README / `package.json` state the patch/minor/major policy from §6 explicitly, so _all_ consumers (not just the hosted one) know what a caret range buys them?
 4. **Caret vs exact on the hosted side.** The hosted consumer pins `^0.6.x`, so patches land unreviewed. Keep the caret and rely on strict patch discipline, or ask the hosted side to pin exact and adopt deliberately?

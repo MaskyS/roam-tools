@@ -121,11 +121,10 @@ export const ErrorCodes = {
   CONNECTION_FAILED: "CONNECTION_FAILED",
   CONFIG_TOO_NEW: "CONFIG_TOO_NEW",
 
-  // Cloud-transport codes — emitted by RoamCloudClient (relemma/functions_ts)
-  // against the AWS Clojure backend at proxy.api.roamresearch.com. Local does
-  // not emit these today.
-  MISSING_AUTH: "MISSING_AUTH", // 401 — WorkOS auth gate failed (no token, malformed token, or signature/issuer/audience invalid). Same agent semantics as MISSING_TOKEN; distinct for operational telemetry across transports.
-  INSUFFICIENT_PERMISSION: "INSUFFICIENT_PERMISSION", // 403 — Picker grant existed in RTDB but Roam-side graph access has been revoked since (firebase.graph/readable? or writeable? returned false). Distinct from TOKEN_NOT_FOUND ("never authorized"): INSUFFICIENT_PERMISSION = "ask user to re-grant"; TOKEN_NOT_FOUND = "pick a different graph or grant fresh access".
+  // Cloud-transport codes — emitted by the hosted client against its own
+  // backend. Local does not emit these today.
+  MISSING_AUTH: "MISSING_AUTH", // 401 — Hosted auth gate failed (no token, malformed token, or invalid signature/issuer/audience). Same agent semantics as MISSING_TOKEN; distinct for operational telemetry across transports.
+  INSUFFICIENT_PERMISSION: "INSUFFICIENT_PERMISSION", // 403 — A prior grant existed but Roam-side graph access has been revoked since. Distinct from TOKEN_NOT_FOUND ("never authorized"): INSUFFICIENT_PERMISSION = "ask user to re-grant"; TOKEN_NOT_FOUND = "pick a different graph or grant fresh access".
   NOT_IMPLEMENTED: "NOT_IMPLEMENTED", // 501 — Action recognized in dispatch but handler not yet wired (Phase 3 backlog). Distinct from ACTION_NOT_AVAILABLE: NOT_IMPLEMENTED implies "will work eventually"; ACTION_NOT_AVAILABLE implies "not available on this transport, period".
   GRAPH_UNSUPPORTED: "GRAPH_UNSUPPORTED", // 400 — Encrypted graph rejection (backend can't decrypt). Agent should not retry; instruct user the graph type isn't supported via cloud transport.
   ACTION_NOT_AVAILABLE: "ACTION_NOT_AVAILABLE", // 501 — Action symbol absent from cloud's dispatch entirely (typo OR action like file.upload that's local-only and intentionally not on cloud). Same agent semantics as UNKNOWN_ACTION (which is local-API 404); distinct for operational telemetry across transports.
@@ -402,7 +401,7 @@ export type TokenInfoResult =
 
 // Structural client interface used by all operations and routeToolCall. The local
 // RoamClient (in @roam-research/roam-tools-local) satisfies this. A hosted
-// RoamCloudClient (out-of-repo) implements the same shape using a different
+// client (out-of-repo) implements the same shape using a different
 // transport. getTokenInfo is optional — the routing layer only invokes it in
 // tokenInfoMode === "local-sync".
 export interface RoamActionClient {
