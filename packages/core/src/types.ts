@@ -121,7 +121,7 @@ export const ErrorCodes = {
   CONNECTION_FAILED: "CONNECTION_FAILED",
   CONFIG_TOO_NEW: "CONFIG_TOO_NEW",
 
-  // Cloud-transport codes — emitted by RoamCloudClient (relemma/functions_v2)
+  // Cloud-transport codes — emitted by RoamCloudClient (relemma/functions_ts)
   // against the AWS Clojure backend at proxy.api.roamresearch.com. Local does
   // not emit these today.
   MISSING_AUTH: "MISSING_AUTH", // 401 — WorkOS auth gate failed (no token, malformed token, or signature/issuer/audience invalid). Same agent semantics as MISSING_TOKEN; distinct for operational telemetry across transports.

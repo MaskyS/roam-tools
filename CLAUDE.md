@@ -54,7 +54,7 @@ Only `@roam-research/roam-tools-core` is currently on npm. Timeline:
 - **0.6.3** shipped **2026-05-20** (trimmed `GUIDELINES_NOTE` — the orientation note appended to every client tool description — to a quiet, transport-neutral one-liner, dropping the "roam mcp tool …" phrasing that misread in CLI/hosted contexts. **Published `core@0.6.3` contains only this description change.** The same commit also added an MCP server `instructions` field in `packages/mcp/src/index.ts` to steer clients through `list_graphs` → `get_graph_guidelines`, but that lives in the unpublished `roam-mcp` package — it is NOT part of published core.)
 - **0.6.4** shipped **2026-05-23** (copy-text only, in `packages/core/src/tools.ts`: reworded the `graph` param `.describe()`, rewrote `GUIDELINES_NOTE` again as a parenthetical nudge, and expanded the `get_graph_guidelines` tool description — all to get agents to fetch guidelines more reliably. **Published `core@0.6.4` contains only these `tools.ts` description changes.** Sibling commits touched `packages/local/src/{graph-resolver,operations/graphs}.ts` and docs, neither of which is in published core.)
 
-`@roam-research/roam-tools-local` has never been published to npm at all (the working tree carries it; no public surface). `@roam-research/roam-mcp` and `@roam-research/roam-cli` remain at `0.5.1` on npm even though the working tree has them at 0.6.x in lockstep. This lets the hosted MCP in `relemma/functions_v2` integrate against the new transport-agnostic core without affecting local users. When hosted integration is proven, a future bump publishes all four packages together via `npm run publish:all`.
+`@roam-research/roam-tools-local` has never been published to npm at all (the working tree carries it; no public surface). `@roam-research/roam-mcp` and `@roam-research/roam-cli` remain at `0.5.1` on npm even though the working tree has them at 0.6.x in lockstep. This lets the hosted MCP in `relemma/functions_ts` integrate against the new transport-agnostic core without affecting local users. When hosted integration is proven, a future bump publishes all four packages together via `npm run publish:all`.
 
 **Why the partial publish is safe (verified 2026-04-25 via `npm view`; invariant unchanged through 0.6.4):** every published `roam-mcp` and `roam-cli` version uses an **exact pin** to a specific `core` version — no caret, no tilde, no range. This is the load-bearing invariant. The full audit:
 
@@ -92,7 +92,7 @@ This is a monorepo with four npm packages for Roam Research tools:
 | `@roam-research/roam-mcp`         | `roam-mcp` | MCP server (consumes local)                                           |
 | `@roam-research/roam-cli`         | `roam`     | CLI (consumes local)                                                  |
 
-The split exists so a hosted MCP transport (in a separate repo, `relemma/functions_v2`) can depend on `roam-tools-core` directly and inject its own graph resolver + WorkOS-authenticated client without dragging the local-Desktop-API code along.
+The split exists so a hosted MCP transport (in a separate repo, `relemma/functions_ts`) can depend on `roam-tools-core` directly and inject its own graph resolver + WorkOS-authenticated client without dragging the local-Desktop-API code along.
 
 ### Entry Points
 
