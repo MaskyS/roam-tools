@@ -217,6 +217,8 @@ This repository is a monorepo with four packages:
 | [`@roam-research/roam-mcp`](packages/mcp)           | MCP server — connect Claude/Cursor/etc. to Roam                                                    |
 | [`@roam-research/roam-cli`](packages/cli)           | CLI — setup and direct tool access                                                                 |
 
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## Development
 
 To work on this project from source:

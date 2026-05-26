@@ -2,7 +2,7 @@
 
 > **Audience:** anyone (human or agent) modifying this repo. Read this before changing anything in `packages/core`.
 > **Why it exists:** `@roam-research/roam-tools-core` is consumed not only by the local packages in this repo but by a **separate, private hosted MCP server** that pins core over npm. That hosted consumer is not in this tree, so it's easy to break it without noticing. This doc explains how the packages divide responsibility, where the transports differ, and the rules that keep a core change from silently breaking the hosted MCP.
-> **Scope:** this is an inward-facing architecture doc. It deliberately describes only **core's public contract** and treats the hosted server abstractly — none of the hosted server's backend internals live here. For version-bump mechanics and release-state notes, see `CLAUDE.md`; this doc does not duplicate them.
+> **Scope:** this is an inward-facing architecture doc. It deliberately describes only **core's public contract** and treats the hosted server abstractly — none of the hosted server's backend internals live here. For version-bump mechanics, see `CLAUDE.md`; for release history, see `CHANGELOG.md`.
 
 ---
 
@@ -202,7 +202,7 @@ Real, intentional differences. Keep them in mind when reasoning about behavior o
 
 ## 7. Relationship to `CLAUDE.md`
 
-`CLAUDE.md` owns the **version-bump mechanics** (the 9 locations, `bump-version.mjs` / `check-versions.mjs`) and release-state notes, including the historical core-only release audit and the exact sibling-pin invariant. This doc owns the **contract** and the **don't-break rules**. When they touch the same idea (exact pins, SemVer), this doc points at `CLAUDE.md` rather than restating it.
+`CLAUDE.md` owns the **version-bump mechanics** (the 9 locations, `bump-version.mjs` / `check-versions.mjs`) and the exact sibling-pin invariant. `CHANGELOG.md` owns release history. This doc owns the **contract** and the **don't-break rules**. When they touch the same idea (exact pins, SemVer), this doc points at `CLAUDE.md` rather than restating it.
 
 ---
 
