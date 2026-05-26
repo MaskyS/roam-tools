@@ -211,7 +211,7 @@ The `~/.roam-tools.json` config file includes a `version` field (default: 1). Wh
 Use the version scripts documented in `CLAUDE.md`; they are the source of truth for the current list of version locations.
 
 ```bash
-npm run version:bump 0.6.4
+npm run version:bump 0.6.5
 npm install
 npm run version:check
 npm run build

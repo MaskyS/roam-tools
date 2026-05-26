@@ -1,6 +1,6 @@
 {
   "name": "@roam-research/roam-cli",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "Official command-line interface for Roam Research",
   "repository": {
     "type": "git",
@@ -34,9 +34,8 @@
     "prepublishOnly": "npm run --prefix ../.. build"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
     "commander": "^14.0.2",
     "zod": "^3.25.76",
-    "@roam-research/roam-tools-local": "0.6.4"
+    "@roam-research/roam-tools-local": "0.6.5"
   }
 }

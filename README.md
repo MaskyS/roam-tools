@@ -210,12 +210,12 @@ Run `roam --help` to see all available commands. You can also use `npx @roam-res
 
 This repository is a monorepo with four packages:
 
-| Package                                             | Description                                                                                                  |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| [`@roam-research/roam-tools-core`](packages/core)   | Transport-agnostic core library (tools, operations, types, dispatch)                                         |
-| [`@roam-research/roam-tools-local`](packages/local) | Local Roam Desktop transport (client, config reader, connect) — internal dependency, not currently published |
-| [`@roam-research/roam-mcp`](packages/mcp)           | MCP server — connect Claude/Cursor/etc. to Roam                                                              |
-| [`@roam-research/roam-cli`](packages/cli)           | CLI — setup and direct tool access                                                                           |
+| Package                                             | Description                                                                                        |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`@roam-research/roam-tools-core`](packages/core)   | Transport-agnostic core library (tools, operations, types, dispatch)                               |
+| [`@roam-research/roam-tools-local`](packages/local) | Local Roam Desktop transport (client, config reader, connect) — internal dependency of MCP and CLI |
+| [`@roam-research/roam-mcp`](packages/mcp)           | MCP server — connect Claude/Cursor/etc. to Roam                                                    |
+| [`@roam-research/roam-cli`](packages/cli)           | CLI — setup and direct tool access                                                                 |
 
 ## Development
 

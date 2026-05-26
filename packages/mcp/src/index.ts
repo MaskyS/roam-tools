@@ -72,7 +72,7 @@ import {
 
 // If these instructions change, the remote MCP server may need the same update.
 const server = new McpServer(
-  { name: "roam-mcp", version: "0.6.4" },
+  { name: "roam-mcp", version: "0.6.5" },
   {
     instructions:
       "This server exposes tools for a user's Roam Research graph(s).\n" +

@@ -44,19 +44,25 @@ The 9 locations:
 
 Run `npm run version:check` to verify all versions are consistent.
 
-### Partial-publish state (current: core@0.6.4)
+### Release state (current: all packages@0.6.5)
 
-Only `@roam-research/roam-tools-core` is currently on npm. Timeline:
+All four workspace packages now release in lockstep via `npm run publish:all`:
+
+- `@roam-research/roam-tools-core`
+- `@roam-research/roam-tools-local`
+- `@roam-research/roam-mcp`
+- `@roam-research/roam-cli`
+
+Historical core-only release timeline:
 
 - **0.6.0** shipped **2026-04-25** (transport-agnostic split; new `roam-tools-local` package introduced in the working tree but never published).
 - **0.6.1** shipped **2026-05-09** (Phase 2c integration: added 6 cloud-transport-only codes to `ErrorCodes` — `MISSING_AUTH`, `INSUFFICIENT_PERMISSION`, `NOT_IMPLEMENTED`, `GRAPH_UNSUPPORTED`, `ACTION_NOT_AVAILABLE`, `PEER_NOT_READY`).
 - **0.6.2** shipped **2026-05-13** (widened `RoamError.code` to `ErrorCode | (string & {})` for cloud-transport opacity; removed 3 `as any` casts in `packages/local/src/client.ts`; updated the remote-MCP integration notes. See "Code vocabulary" below and `docs/architecture.md` for the current contract framing.)
 - **0.6.3** shipped **2026-05-20** (trimmed `GUIDELINES_NOTE` — the orientation note appended to every client tool description — to a quiet, transport-neutral one-liner, dropping the "roam mcp tool …" phrasing that misread in CLI/hosted contexts. **Published `core@0.6.3` contains only this description change.** The same commit also added an MCP server `instructions` field in `packages/mcp/src/index.ts` to steer clients through `list_graphs` → `get_graph_guidelines`, but that lives in the unpublished `roam-mcp` package — it is NOT part of published core.)
 - **0.6.4** shipped **2026-05-23** (copy-text only, in `packages/core/src/tools.ts`: reworded the `graph` param `.describe()`, rewrote `GUIDELINES_NOTE` again as a parenthetical nudge, and expanded the `get_graph_guidelines` tool description — all to get agents to fetch guidelines more reliably. **Published `core@0.6.4` contains only these `tools.ts` description changes.** Sibling commits touched `packages/local/src/{graph-resolver,operations/graphs}.ts` and docs, neither of which is in published core.)
+- **0.6.5** ships all four packages together for the first time after local MCP/CLI compatibility was verified.
 
-`@roam-research/roam-tools-local` has never been published to npm at all (the working tree carries it; no public surface). `@roam-research/roam-mcp` and `@roam-research/roam-cli` remain at `0.5.1` on npm even though the working tree has them at 0.6.x in lockstep. This lets the hosted MCP (a separate, private repo) integrate against the new transport-agnostic core without affecting local users. When hosted integration is proven, a future bump publishes all four packages together via `npm run publish:all`.
-
-**Why the partial publish is safe (verified 2026-04-25 via `npm view`; invariant unchanged through 0.6.4):** every published `roam-mcp` and `roam-cli` version uses an **exact pin** to a specific `core` version — no caret, no tilde, no range. This is the load-bearing invariant. The full audit:
+**Historical core-only release safety audit (verified 2026-04-25 via `npm view`; invariant held through 0.6.4):** every published `roam-mcp` and `roam-cli` version used an **exact pin** to a specific `core` version — no caret, no tilde, no range. The full audit:
 
 | Package           | Versions on npm                                                                          | `core` dep pin                                                    |
 | ----------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -65,9 +71,9 @@ Only `@roam-research/roam-tools-core` is currently on npm. Timeline:
 | `roam-cli`        | `0.4.0` → `0.5.1`                                                                        | exact `0.4.0` → exact `0.5.1` (one-to-one with cli's own version) |
 | `roam-tools-core` | `0.4.0`, `0.4.1`, `0.4.2`, `0.5.0`, `0.5.1`, `0.6.0`, `0.6.1`, `0.6.2`, `0.6.3`, `0.6.4` | n/a — terminal package                                            |
 
-Implication: `npx roam-mcp@latest` resolves to `roam-mcp@0.5.1` → `core@0.5.1`. Cannot pick up any `0.6.x`. Same for any historical `npm install` — even `roam-mcp@0.4.0` is safe because it pins `core@0.4.0` exactly. The only way to reach `core@0.6.x` is to install it explicitly (`npm install @roam-research/roam-tools-core[@latest|@0.6.4|@^0.6.0]`), which is what the hosted MCP does on purpose.
+Implication for the historical core-only release window: `npx roam-mcp@latest` resolved to `roam-mcp@0.5.1` → `core@0.5.1`, so it could not pick up any `0.6.x` core-only releases. The only way to reach `core@0.6.x` during that window was to install it explicitly (`npm install @roam-research/roam-tools-core[@latest|@0.6.x|@^0.6.0]`), which is what the hosted MCP did on purpose.
 
-**Maintainer obligation:** the `bump-version.mjs` script writes exact dep strings (no semver ranges). Do not change this — the partial-publish strategy depends on it. If a future PR introduces caret/tilde dep ranges in mcp's or cli's `package.json`, the safety guarantee above no longer holds and we'd have to publish all four packages together every time.
+**Maintainer obligation:** the `bump-version.mjs` script writes exact sibling dependency strings (no semver ranges). Do not change this — lockstep publishing depends on it. If a future PR introduces caret/tilde dep ranges between workspace packages, published packages could silently mix untested sibling versions.
 
 ### Code vocabulary (post-0.6.2)
 
