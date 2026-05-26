@@ -1,7 +1,7 @@
 {
   "name": "@roam-research/roam-mcp",
   "version": "0.6.4",
-  "description": "Roam Research MCP server",
+  "description": "Official MCP server for Roam Research — connect Claude and other AI assistants to your graph",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Roam-Research/roam-tools.git",
@@ -20,7 +20,11 @@
     "roam",
     "roam-research",
     "mcp",
-    "model-context-protocol"
+    "model-context-protocol",
+    "claude",
+    "ai",
+    "llm",
+    "ai-agents"
   ],
   "publishConfig": {
     "access": "public"

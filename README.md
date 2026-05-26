@@ -1,6 +1,6 @@
 # Roam MCP
 
-A Model Context Protocol (MCP) server and CLI for Roam Research.
+The official [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server and CLI for [Roam Research](https://roamresearch.com/). Connect Claude, Cursor, and other AI assistants to your Roam graph — read, write, search, and query.
 
 > **Alpha Software**: This project is in early development and subject to breaking changes.
 

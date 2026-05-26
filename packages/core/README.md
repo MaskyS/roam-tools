@@ -1,6 +1,6 @@
 # @roam-research/roam-tools-core
 
-Transport-agnostic core for Roam Research MCP and CLI tools. Provides the tool registry, schemas, operation functions, and dispatch — but no transport.
+The official transport-agnostic core for Roam Research's MCP and CLI tools. Provides the tool registry, schemas, operation functions, and dispatch — but no transport.
 
 > **Most users don't want this package directly.** If you want to connect an AI assistant to Roam, install [`@roam-research/roam-mcp`](https://www.npmjs.com/package/@roam-research/roam-mcp). For the command line, install [`@roam-research/roam-cli`](https://www.npmjs.com/package/@roam-research/roam-cli). Both wrap the local Roam Desktop transport ([`@roam-research/roam-tools-local`](https://www.npmjs.com/package/@roam-research/roam-tools-local)) which depends on this package.
 

@@ -1,8 +1,8 @@
 # @roam-research/roam-cli
 
-Command-line interface for [Roam Research](https://roamresearch.com/).
+The official command-line interface for [Roam Research](https://roamresearch.com/).
 
-Used for setup (connecting graphs, managing tokens) and direct tool access (search, get pages, create blocks, etc.).
+Used for setup (connecting graphs, managing tokens) and direct tool access (search, get pages, create blocks, etc.) — the same Roam tools [`@roam-research/roam-mcp`](https://www.npmjs.com/package/@roam-research/roam-mcp) exposes to AI assistants like Claude.
 
 > **Alpha Software**: This project is in early development and subject to breaking changes.
 

@@ -1,8 +1,8 @@
 # @roam-research/roam-mcp
 
-A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for [Roam Research](https://roamresearch.com/).
+The official [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for [Roam Research](https://roamresearch.com/).
 
-Connects Claude, Cursor, and other MCP clients to your Roam graphs for reading, writing, and searching.
+Connect Claude, Cursor, and other AI assistants to your Roam graph for reading, writing, and searching.
 
 > **Alpha Software**: This project is in early development and subject to breaking changes.
 
