@@ -73,7 +73,7 @@ import {
 // If these instructions change, the remote MCP server may need the same update.
 const server = new McpServer(
   {
-    name: "roam-mcp",
+    name: "roam-mcp-local",
     title: "Roam Research",
     description:
       "Tools for reading and writing your Roam Research graph(s): pages, blocks, search, queries, comments, and files.",
