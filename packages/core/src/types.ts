@@ -1,5 +1,10 @@
 // Re-export MCP types for tool results
-export type { CallToolResult, TextContent, ImageContent } from "@modelcontextprotocol/sdk/types.js";
+export type {
+  CallToolResult,
+  TextContent,
+  ImageContent,
+  ToolAnnotations,
+} from "@modelcontextprotocol/sdk/types.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 

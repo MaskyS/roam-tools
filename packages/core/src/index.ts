@@ -47,6 +47,7 @@ export type {
   QueryResponse,
   TokenInfoResponse,
   TokenInfoResult,
+  ToolAnnotations,
 } from "./types.js";
 export {
   GraphConfigSchema,

@@ -72,7 +72,14 @@ import {
 
 // If these instructions change, the remote MCP server may need the same update.
 const server = new McpServer(
-  { name: "roam-mcp", version: "0.6.5" },
+  {
+    name: "roam-mcp",
+    title: "Roam Research",
+    description:
+      "Tools for reading and writing your Roam Research graph(s): pages, blocks, search, queries, comments, and files.",
+    websiteUrl: "https://roamresearch.com",
+    version: "0.6.5",
+  },
   {
     instructions:
       "This server exposes tools for a user's Roam Research graph(s).\n" +
@@ -82,13 +89,18 @@ const server = new McpServer(
   },
 );
 
-// Register each tool with its Zod schema
+// Register each tool with its Zod schema. title + annotations come from each
+// tool definition (core data/desktop tools + local standalones); forward them
+// generically so the tools/list metadata stays consistent across the local and
+// hosted MCP servers.
 for (const tool of tools) {
   server.registerTool(
     tool.name,
     {
+      title: tool.title,
       description: tool.description,
       inputSchema: tool.schema,
+      annotations: tool.annotations,
     },
     async (args) => {
       try {
