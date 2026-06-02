@@ -53,7 +53,7 @@ interface RouteToolCallOptions {
 }
 ```
 
-What it does, in order (`packages/core/src/tools.ts`): find the tool → **reject standalone tools** (throws; core only routes `client` tools) → validate `args` against the tool's Zod schema → strip the `graph` field out of args → `resolveGraph(graphArg)` → `createClient(graph)` → (only for `get_graph_guidelines` **and** `tokenInfoMode === "local-sync"` **and** `client.getTokenInfo` present: run the token-info side flow) → otherwise `tool.action(client, restArgs)` → on success, `prependGraphInfo` → wrap any thrown `RoamError` into the structured error result.
+What it does, in order (`packages/core/src/tools.ts`): find the tool → **reject standalone tools** (throws; core only routes `client` tools) → validate `args` against the tool's Zod schema → strip the `graph` field out of args → `resolveGraph(graphArg)` → `createClient(graph)` → (only for `get_graph_guidelines` **and** `tokenInfoMode === "local-sync"` **and** `client.getTokenInfo` present: run the token-info side flow) → otherwise `tool.action(client, restArgs)` → on success, `withGraphField` → wrap any thrown `RoamError` into the structured error result.
 
 ### 2b. The interfaces a consumer implements / receives
 
@@ -66,7 +66,7 @@ interface RoamActionClient {
 interface ToolGraph {
   name: string; // canonical graph name (the transport uses this to address the graph)
   type: GraphType; // "hosted" | "offline"
-  nickname: string; // result prefix, and local-sync uses it as the token-status update key
+  nickname: string; // local-sync token-status update key (the result prefix now uses the graph name)
   accessLevel?: AccessLevel; // "read-only" | "read-append" | "full"
   token?: string; // local-only; a hosted resolver omits it
 }
@@ -99,13 +99,16 @@ class RoamError extends Error {
 | `contentTools` / `tools`                         | `[...dataTools, ...desktopUiTools]`.                                                                                                                                              |
 | `findTool`, `defineTool`, `defineStandaloneTool` | registry helpers. `defineTool` runs `withGraph` to add the optional `graph` param to every client tool.                                                                           |
 
+A tool definition may also carry an optional `outputSchema` (declared on the 8 write tools only — see §2e for the `structuredContent` contract).
+
 `withGraph`'s `graph` param description is intentionally transport-neutral: _"Graph to act on, by nickname or name. Optional — if only one graph is available, it is used automatically."_ — it must not assume local-only concepts.
 
 ### 2e. Constants & result behavior
 
 - `EXPECTED_API_VERSION` (`"1.1.2"`) — sent on every backend call; the backend compares **major.minor** exactly (patch ignored). Consumers read it from core, never hardcode.
 - `CONFIG_VERSION` (`1`).
-- `prependGraphInfo` prepends `"Roam graph: ${nickname}\n\n"` to the first text block of every successful client-tool result. `GUIDELINES_NOTE` is appended to client-tool descriptions to nudge `get_graph_guidelines`.
+- **Output schemas & `structuredContent` (write-only).** Tool definitions carry an optional `outputSchema` (a Zod object), declared on the **8 write tools only** — the 9 reads are content-only. `textResult(value)` attaches `value` as `structuredContent` for any plain object; `stripUndeclaredStructuredContent(result, tool)` drops it again when the tool has **no** `outputSchema`. The wire invariant is therefore **`structuredContent` is present iff the tool declares an `outputSchema`** — and **every transport must apply the strip-gate** (the SDK validates `structuredContent` against the schema on success and throws if a schema-bearing tool returns none). Schemas are `.passthrough()` + all-optional; keep changes to a _declared_ write field **additive** (clients such as ChatGPT validate live responses against a ~1-day-stale cached `tools/list` schema, so a non-additive change can break a tool for ~a day — use a new tool name or expand-contract). Reads are deliberately schema-less: a schema would double the payload (`textResult` already serializes the whole result into the text channel) and read shapes still evolve.
+- `withGraphField` carries the resolved graph identity as a structured `graph` field (canonical graph name) — injected into `structuredContent` (write tools) and into the result's JSON text body when it parses as an object (content-only reads) — instead of a `"Roam graph: …"` text prefix. `GUIDELINES_NOTE` is appended to client-tool descriptions to nudge `get_graph_guidelines`.
 
 ### 2f. Client conventions & the error envelope
 
@@ -142,8 +145,9 @@ Any `RoamActionClient` implementation must follow two conventions, because the o
 
 The hosted MCP server lives in a separate, private repo and is **not** in this tree. From core's perspective it is just another consumer of the §2 contract. At a high level it:
 
-- Imports `dataTools`, `routeToolCall`, `RoamError`, `ErrorCodes`, and the `RoamActionClient` / `ToolGraph` types from `core`. Its installed-package tests also guard `EXPECTED_API_VERSION`, `desktopUiTools`, and `defineStandaloneTool`.
+- Imports `dataTools`, `routeToolCall`, `RoamError`, `ErrorCodes`, and the `RoamActionClient` / `ToolGraph` types from `core` (and, from `0.6.7`, `stripUndeclaredStructuredContent`). Its installed-package tests also guard `EXPECTED_API_VERSION`, `desktopUiTools`, and `defineStandaloneTool`.
 - Registers **`dataTools` only** (omits `desktopUiTools` — remote contexts have no local window/filesystem).
+- **Forwards each tool's `outputSchema` and applies the strip-gate** (see §2e). It passes `outputSchema: tool.outputSchema` into its `registerTool` config, and after `routeToolCall` returns it drops `structuredContent` for any tool with no `outputSchema` — via the shared `stripUndeclaredStructuredContent` helper (from `0.6.7`; a hand-rolled inline check before then) — so the "`structuredContent` iff `outputSchema`" invariant is identical to the local transport. Its own standalone tools (e.g. `list_graphs`) may declare their own `outputSchema` + emit `structuredContent` directly.
 - Injects its **own** `resolveGraph` (backed by its own grant store, not `~/.roam-tools.json`) and its **own** client (its own auth, not a local token).
 - Passes `tokenInfoMode: "skip"` and does **not** implement `getTokenInfo` — so the `get_graph_guidelines` side flow never fires.
 - Authors its **own** `list_graphs` / `setup_new_graph` standalone tools and registers them directly with the MCP SDK. (They can't go through `routeToolCall`, which throws on standalone tools.)
@@ -157,15 +161,15 @@ That caret is the crux of §6: anything we ship in a `0.6.x` patch reaches the h
 
 Real, intentional differences. Keep them in mind when reasoning about behavior or writing copy.
 
-| Aspect                      | Local (`roam-tools-local`)             | Hosted (separate repo)                      | Core's stance                                                                                                                                        |
-| --------------------------- | -------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **nickname**                | **Required** (kebab-case schema field) | **Optional** (falls back to the graph name) | Core requires a value for result prefixes; local-sync also passes it to `onTokenStatusUpdate`; hosted resolvers set it to the graph name when absent |
-| **`graph` param**           | accepts nickname **or** name           | accepts nickname **or** name                | the param is the same string either way                                                                                                              |
-| **resolution lookup order** | nickname → name                        | name → nickname                             | core doesn't resolve; the injected `resolveGraph` does                                                                                               |
-| **`tokenInfoMode` default** | `"local-sync"` (local wrapper sets it) | `"skip"`                                    | core's own default is `"skip"`                                                                                                                       |
-| **`getTokenInfo`**          | implemented (`RoamClient`)             | not implemented                             | optional on the interface                                                                                                                            |
-| **standalone tools**        | `graphManagementTools` (2)             | authors its own                             | core has none                                                                                                                                        |
-| **error codes**             | emits a subset of `ErrorCodes`         | passes its backend's codes through verbatim | `RoamError.code` accepts arbitrary strings since 0.6.2                                                                                               |
+| Aspect                      | Local (`roam-tools-local`)             | Hosted (separate repo)                      | Core's stance                                                                                                                                                                            |
+| --------------------------- | -------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **nickname**                | **Required** (kebab-case schema field) | **Optional** (falls back to the graph name) | local-sync passes it to `onTokenStatusUpdate` (token-status key); hosted resolvers set it to the graph name when absent. The result prefix now uses the graph **name**, not the nickname |
+| **`graph` param**           | accepts nickname **or** name           | accepts nickname **or** name                | the param is the same string either way                                                                                                                                                  |
+| **resolution lookup order** | nickname → name                        | name → nickname                             | core doesn't resolve; the injected `resolveGraph` does                                                                                                                                   |
+| **`tokenInfoMode` default** | `"local-sync"` (local wrapper sets it) | `"skip"`                                    | core's own default is `"skip"`                                                                                                                                                           |
+| **`getTokenInfo`**          | implemented (`RoamClient`)             | not implemented                             | optional on the interface                                                                                                                                                                |
+| **standalone tools**        | `graphManagementTools` (2)             | authors its own                             | core has none                                                                                                                                                                            |
+| **error codes**             | emits a subset of `ErrorCodes`         | passes its backend's codes through verbatim | `RoamError.code` accepts arbitrary strings since 0.6.2                                                                                                                                   |
 
 ---
 
@@ -183,7 +187,7 @@ Real, intentional differences. Keep them in mind when reasoning about behavior o
 
 ### Don't-break checklist (a change needs a minor or major bump if it does any of these)
 
-- Adds a **required** field to `RouteToolCallOptions`, or changes `resolveGraph` / `createClient` signatures, or changes the dispatch contract (rejecting standalones, stripping `graph`, `prependGraphInfo`).
+- Adds a **required** field to `RouteToolCallOptions`, or changes `resolveGraph` / `createClient` signatures, or changes the dispatch contract (rejecting standalones, stripping `graph`, `withGraphField`).
 - Removes or renames a core barrel export: `dataTools`, `desktopUiTools`, `routeToolCall`, `defineStandaloneTool`, `RoamError`, `ErrorCodes`, `RoamActionClient`, `ToolGraph`, `EXPECTED_API_VERSION`, the result/type helpers.
 - Changes the shape of `ToolGraph`, `RoamActionClient`, `RoamResponse`, `RoamApiError`, or `RoamError`.
 - Removes or renames an `ErrorCodes` member (adding one is safe). Also: never validate a code against the enum — the hosted transport emits codes core doesn't know.

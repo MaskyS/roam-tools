@@ -65,6 +65,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   tools,
   routeToolCall,
+  stripUndeclaredStructuredContent,
   getMcpConfig,
   RoamError,
   ErrorCodes,
@@ -78,7 +79,7 @@ const server = new McpServer(
     description:
       "Tools for reading and writing your Roam Research graph(s): pages, blocks, search, queries, comments, and files.",
     websiteUrl: "https://roamresearch.com",
-    version: "0.6.6",
+    version: "0.6.7",
   },
   {
     instructions:
@@ -101,10 +102,13 @@ for (const tool of tools) {
       description: tool.description,
       inputSchema: tool.schema,
       annotations: tool.annotations,
+      outputSchema: tool.outputSchema,
     },
     async (args) => {
       try {
-        return await routeToolCall(tool.name, args as Record<string, unknown>);
+        const result = await routeToolCall(tool.name, args as Record<string, unknown>);
+        // Schema-less tools are content-only (shared core invariant).
+        return stripUndeclaredStructuredContent(result, tool);
       } catch (error) {
         // Safety net for unexpected errors (RoamErrors are handled by routeToolCall)
         const message = error instanceof Error ? error.message : String(error);

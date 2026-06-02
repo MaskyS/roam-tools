@@ -92,6 +92,9 @@ export interface ClientToolDefinition {
   // boundary; the backend still enforces real authorization.
   title?: string;
   annotations?: ToolAnnotations;
+  // Structured-result schema advertised in tools/list; the SDK validates it
+  // against structuredContent on success. See the output schema presets below.
+  outputSchema?: z.AnyZodObject;
 }
 
 // Standalone tool that handles its own graph resolution
@@ -103,6 +106,7 @@ export interface StandaloneToolDefinition {
   type: "standalone";
   title?: string;
   annotations?: ToolAnnotations;
+  outputSchema?: z.AnyZodObject;
 }
 
 export type ToolDefinition = ClientToolDefinition | StandaloneToolDefinition;
@@ -111,7 +115,11 @@ export type ToolDefinition = ClientToolDefinition | StandaloneToolDefinition;
 // each defineTool call. Co-located with the tool so adding a tool prompts you to
 // classify it. Annotations are hints only — not a security boundary; the backend
 // still enforces real authorization.
-type ToolMetaArg = { title?: string; annotations?: ToolAnnotations };
+type ToolMetaArg = {
+  title?: string;
+  annotations?: ToolAnnotations;
+  outputSchema?: z.AnyZodObject;
+};
 
 // Helper to create tool with graph parameter
 export function defineTool<T extends z.ZodRawShape>(
@@ -129,6 +137,7 @@ export function defineTool<T extends z.ZodRawShape>(
     type: "client",
     title: meta?.title,
     annotations: meta?.annotations,
+    outputSchema: meta?.outputSchema,
   };
 }
 
@@ -148,6 +157,7 @@ export function defineStandaloneTool<T extends z.ZodRawShape>(
     type: "standalone",
     title: meta?.title,
     annotations: meta?.annotations,
+    outputSchema: meta?.outputSchema,
   };
 }
 
@@ -162,10 +172,14 @@ const GUIDELINES_NOTE =
 // mirror the backend's read/append/edit/delete classification. Hints only — NOT
 // a security boundary; the backend still enforces authorization.
 //
-// readOnlyHint describes effects on the user's GRAPH CONTENT. Incidental local
-// bookkeeping — e.g. get_graph_guidelines syncing token status into
-// ~/.roam-tools.json (the local-sync side flow) — does not flip it; contrast
-// setup_new_graph, whose config write IS its purpose, so it is not read-only.
+// readOnlyHint describes effects on the user's GRAPH CONTENT. We keep it true for a
+// few tools that do idempotent orientation scaffolding rather than a real write:
+// get_graph_guidelines syncs local token status (~/.roam-tools.json, local-sync) and,
+// on the hosted backend under an append/full grant, may auto-create today's daily note
+// page + provision the "<name> (AI)" display page. These never fire for a read-only
+// grant and are idempotent, so flipping to readOnlyHint:false would only make clients
+// gate the very orientation tool they're told to call first. Contrast setup_new_graph,
+// whose config write IS its purpose, so it is not read-only.
 //
 // openWorldHint is false for every tool except file_upload (its url path fetches
 // an arbitrary external host server-side).
@@ -208,6 +222,35 @@ const NAV: ToolAnnotations = {
 // file_upload's url path does a server-side fetch of an arbitrary host.
 const UPLOAD: ToolAnnotations = { ...APPEND, openWorldHint: true };
 
+// ----------------------------------------------------------------------------
+// Output schemas (MCP tools/list structured-result hints) — WRITE TOOLS ONLY.
+// The 8 write tools declare a schema (and emit structuredContent); the 9 read
+// tools are content-only. Why write-only:
+//   - structuredContent duplicates the whole result into the text channel
+//     (textResult already JSON-stringifies it), so a schema on big reads
+//     (get_page/search) just doubles the payload for no gain.
+//   - read output shapes still evolve; write shapes ({success}/{uids}/{uid}) are
+//     small and finalized.
+// CACHE HAZARD (drives the additive-only rule): ChatGPT caches the tools/list
+// descriptor ~1 day and validates live responses against that STALE cached
+// outputSchema. With .passthrough() + all-optional, additive changes survive a
+// stale cache; a NON-additive change to a declared field (retype/rename/remove)
+// can break the tool for ~a day. To change a declared field: new tool name, or
+// expand-contract (add new field → wait out the cache → drop the old). See the
+// chatgpt-mcp-annotations-and-tool-cache finding. NOTE: .optional() accepts
+// absent/undefined but REJECTS null — a declared field whose producer can emit
+// null needs .nullable(). `graph` is injected by withGraphField (canonical name).
+// ----------------------------------------------------------------------------
+const SuccessOutput = z
+  .object({ success: z.boolean().optional(), graph: z.string().optional() })
+  .passthrough();
+const UidOutput = z
+  .object({ uid: z.string().optional(), graph: z.string().optional() })
+  .passthrough();
+const UidsOutput = z
+  .object({ uids: z.array(z.string()).optional(), graph: z.string().optional() })
+  .passthrough();
+
 // Data Tools (require graph/client; reusable across local + hosted MCP transports)
 export const dataTools: ClientToolDefinition[] = [
   defineTool(
@@ -222,7 +265,7 @@ export const dataTools: ClientToolDefinition[] = [
     "Create a new page in Roam, optionally with markdown content." + GUIDELINES_NOTE,
     CreatePageSchema,
     createPage,
-    { title: "Create page", annotations: APPEND },
+    { title: "Create page", annotations: APPEND, outputSchema: UidOutput },
   ),
   defineTool(
     "create_block",
@@ -230,7 +273,7 @@ export const dataTools: ClientToolDefinition[] = [
       GUIDELINES_NOTE,
     CreateBlockSchema,
     createBlock,
-    { title: "Create blocks", annotations: APPEND },
+    { title: "Create blocks", annotations: APPEND, outputSchema: UidsOutput },
   ),
   defineTool(
     "update_block",
@@ -238,21 +281,22 @@ export const dataTools: ClientToolDefinition[] = [
       GUIDELINES_NOTE,
     UpdateBlockSchema,
     updateBlock,
-    { title: "Update block", annotations: EDIT },
+    { title: "Update block", annotations: EDIT, outputSchema: SuccessOutput },
   ),
   defineTool(
     "delete_block",
-    "Delete a block and all its children." + GUIDELINES_NOTE,
+    'Delete a block and all its descendants — irreversible. If the block is referenced elsewhere, deletion REPLACES those ((uid)) refs with its text (graph surgery, not string removal — on approval you can instead delete the referencing blocks). Inspect with get_block first: its markdown flags referenced blocks with `refs="N"` (and `hiddenChildren="N"` for subtrees beyond maxDepth), and comments count as refs. If anything shows `refs`, or the subtree is large (~20+ blocks / 500+ words), check get_backlinks and confirm with the user before deleting. For cleanup, only delete blocks created this task or named by the user.' +
+      GUIDELINES_NOTE,
     DeleteBlockSchema,
     deleteBlock,
-    { title: "Delete block", annotations: DELETE },
+    { title: "Delete block", annotations: DELETE, outputSchema: SuccessOutput },
   ),
   defineTool(
     "move_block",
     "Move a block to a new location." + GUIDELINES_NOTE,
     MoveBlockSchema,
     moveBlock,
-    { title: "Move block", annotations: EDIT },
+    { title: "Move block", annotations: EDIT, outputSchema: SuccessOutput },
   ),
   defineTool(
     "add_comment",
@@ -260,7 +304,7 @@ export const dataTools: ClientToolDefinition[] = [
       GUIDELINES_NOTE,
     AddCommentSchema,
     addComment,
-    { title: "Add comment", annotations: APPEND },
+    { title: "Add comment", annotations: APPEND, outputSchema: UidsOutput },
   ),
   defineTool(
     "get_comments",
@@ -272,10 +316,11 @@ export const dataTools: ClientToolDefinition[] = [
   ),
   defineTool(
     "delete_page",
-    "Delete a page and all its contents." + GUIDELINES_NOTE,
+    "Delete a page and all its blocks — irreversible. If the page is referenced elsewhere, deleting it also edits every block that links to it — those `[[page]]` references are removed (graph surgery, not just removing the page). Inspect with get_page first: its header shows the page's `refs:` count (how many blocks link to it). If `refs:` is non-zero, or the page has substantial content, confirm with the user before deleting. For cleanup, only delete pages created this task or named by the user." +
+      GUIDELINES_NOTE,
     DeletePageSchema,
     deletePage,
-    { title: "Delete page", annotations: DELETE },
+    { title: "Delete page", annotations: DELETE, outputSchema: SuccessOutput },
   ),
   defineTool(
     "update_page",
@@ -283,7 +328,7 @@ export const dataTools: ClientToolDefinition[] = [
       GUIDELINES_NOTE,
     UpdatePageSchema,
     updatePage,
-    { title: "Update page", annotations: EDIT },
+    { title: "Update page", annotations: EDIT, outputSchema: SuccessOutput },
   ),
   defineTool(
     "search",
@@ -411,27 +456,56 @@ export function findTool(name: string): ToolDefinition | undefined {
 }
 
 /**
- * Prepend graph nickname to a tool result.
+ * Drop `structuredContent` when the tool declares no `outputSchema`. structuredContent
+ * is only meaningful (and SDK-validated) when a schema is declared; for content-only
+ * tools (all reads + file/nav) it would just duplicate the text channel (e.g. a large
+ * file_get payload). Shared by both transports so the "schema-less ⇒ content-only"
+ * invariant can't drift between them.
  */
-function prependGraphInfo(result: CallToolResult, nickname: string): CallToolResult {
-  const prefix = `Roam graph: ${nickname}`;
-  const content = result.content;
+export function stripUndeclaredStructuredContent(
+  result: CallToolResult,
+  tool: { outputSchema?: unknown },
+): CallToolResult {
+  if (tool.outputSchema || result.structuredContent === undefined) return result;
+  const stripped = { ...result };
+  delete stripped.structuredContent;
+  return stripped;
+}
 
-  if (!content || content.length === 0) return result;
-
-  const first = content[0];
-  if (first.type === "text") {
-    return {
-      ...result,
-      content: [{ ...first, text: `${prefix}\n\n${first.text}` }, ...content.slice(1)],
-    };
+/**
+ * Carry the resolved graph identity as a structured `graph` field rather than a
+ * "Roam graph: <name>" text prefix (which read as block content and made a read's
+ * JSON text non-parseable). Injects the canonical graph name into
+ * structuredContent (write tools) and into content[0].text when it parses to a
+ * plain JSON object (the only channel for content-only reads). Bare arrays/scalars
+ * (datalog raw text), images, non-JSON prose, and isError results are left
+ * untouched. Mirrors enrichResultWithTokenInfo's parse-and-rewrite.
+ */
+function withGraphField(result: CallToolResult, graphName: string): CallToolResult {
+  let out = result;
+  const sc = result.structuredContent;
+  if (sc && typeof sc === "object" && !Array.isArray(sc)) {
+    // canonical resolved graph wins over any `graph` key the backend included
+    out = { ...out, structuredContent: { ...(sc as Record<string, unknown>), graph: graphName } };
   }
-
-  // For image or other content types, prepend a text block
-  return {
-    ...result,
-    content: [{ type: "text", text: prefix }, ...content],
-  };
+  const first = out.content?.[0];
+  if (first && first.type === "text") {
+    try {
+      const parsed = JSON.parse(first.text);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        out = {
+          ...out,
+          content: [
+            { ...first, text: JSON.stringify({ ...parsed, graph: graphName }, null, 2) },
+            ...out.content.slice(1),
+          ],
+        };
+      }
+    } catch {
+      // not a JSON object (datalog raw array, prose) — leave the text untouched
+    }
+  }
+  return out;
 }
 
 /**
@@ -447,10 +521,19 @@ function enrichResultWithTokenInfo(
     const parsed = JSON.parse(first.text);
     parsed.accessLevel = info.grantedAccessLevel;
     parsed.scopes = info.grantedScopes;
-    return {
+    const enriched: CallToolResult = {
       ...result,
       content: [{ ...first, text: JSON.stringify(parsed, null, 2) }, ...result.content.slice(1)],
     };
+    // Keep structuredContent in sync with the enriched text (local-sync path).
+    if (result.structuredContent && typeof result.structuredContent === "object") {
+      enriched.structuredContent = {
+        ...result.structuredContent,
+        accessLevel: info.grantedAccessLevel,
+        scopes: info.grantedScopes,
+      };
+    }
+    return enriched;
   } catch {
     return result;
   }
@@ -511,8 +594,8 @@ export interface RouteToolCallOptions {
   /**
    * "local-sync" runs the desktop token-info side-flow on get_graph_guidelines:
    * parallel getTokenInfo, access-level validation, status writes, and result
-   * enrichment. "skip" (default) disables that side-flow entirely. Graph-name
-   * prefix (prependGraphInfo) is unaffected by this mode and runs in both.
+   * enrichment. "skip" (default) disables that side-flow entirely. The graph
+   * field (withGraphField) is unaffected by this mode and runs in both.
    */
   tokenInfoMode?: "local-sync" | "skip";
   /**
@@ -630,7 +713,7 @@ export async function routeToolCall(
 
         if (!result.isError) {
           const enriched = enrichResultWithTokenInfo(result, info);
-          return prependGraphInfo(enriched, resolvedGraph.nickname);
+          return withGraphField(enriched, resolvedGraph.name);
         }
         return result;
       }
@@ -644,16 +727,16 @@ export async function routeToolCall(
         }
       }
       if (!result.isError) {
-        return prependGraphInfo(result, resolvedGraph.nickname);
+        return withGraphField(result, resolvedGraph.name);
       }
       return result;
     }
 
     // Normal flow for all other tools (and get_graph_guidelines when token-info
-    // sync is skipped or unavailable). Graph-name prefix runs in both modes.
+    // sync is skipped or unavailable). The graph field runs in both modes.
     const result = await tool.action(client, restArgs);
     if (!result.isError) {
-      return prependGraphInfo(result, graph.nickname);
+      return withGraphField(result, graph.name);
     }
     return result;
   } catch (error) {

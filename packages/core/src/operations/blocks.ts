@@ -168,7 +168,10 @@ export async function getBlock(
   if (params.maxDepth !== undefined) apiParams.maxDepth = params.maxDepth;
 
   const response = await client.call<GetBlockResponse | undefined>("data.ai.getBlock", [apiParams]);
-  return textResult(response.result ?? null);
+  // Not-found: a found block always has a `uid`, so treat a nullish/uid-less result
+  // (incl. `{}`) as a miss and return an explicit { found: false } signal — clearer
+  // than an empty object that reads as a successful empty block.
+  return textResult(response.result?.uid ? response.result : { found: false });
 }
 
 export async function updateBlock(

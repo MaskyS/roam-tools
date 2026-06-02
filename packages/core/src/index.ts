@@ -67,6 +67,7 @@ export {
   tools,
   findTool,
   routeToolCall,
+  stripUndeclaredStructuredContent,
   contentTools,
   dataTools,
   desktopUiTools,

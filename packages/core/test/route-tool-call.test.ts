@@ -34,6 +34,8 @@ describe("routeToolCall — injection contract", () => {
                   uid: "abc",
                   markdown: "fake markdown content",
                   queriedAt: "2026-01-01T00:00:00Z",
+                  // a backend-provided `graph` must NOT win over the canonical resolved name
+                  graph: "spoofed",
                 },
               };
             },
@@ -50,7 +52,8 @@ describe("routeToolCall — injection contract", () => {
     const first = result.content[0];
     expect(first.type).toBe("text");
     const text = (first as { text: string }).text;
-    expect(text.startsWith("Roam graph: test")).toBe(true);
+    // canonical resolved name wins over the backend's `graph: "spoofed"`
+    expect(JSON.parse(text).graph).toBe("test-graph");
     expect(text).toContain("fake markdown content");
   });
 });
@@ -92,10 +95,37 @@ describe("routeToolCall — get_graph_guidelines with tokenInfoMode: 'skip'", ()
     // Side flow was skipped
     expect(getTokenInfoSpy).not.toHaveBeenCalled();
     expect(onTokenStatusUpdate).not.toHaveBeenCalled();
-    // Graph-name prefix still applies (documented behavior)
+    // graph field still applies (documented behavior)
     expect(result.isError).toBeFalsy();
     const text = (result.content[0] as { text: string }).text;
-    expect(text.startsWith("Roam graph: test")).toBe(true);
+    expect(JSON.parse(text).graph).toBe("test-graph");
     expect(text).toContain("do nice things");
   });
+});
+
+// ---------------------------------------------------------------------------
+// Test D — get_page / get_block treat an empty/uid-less result as not-found
+// ---------------------------------------------------------------------------
+// A miss must yield { found: false } even when the backend returns `{}` (not just
+// null/undefined) — a found page/block always carries a `uid`.
+describe("routeToolCall — get_page / get_block not-found", () => {
+  it.each(["get_page", "get_block"])(
+    "%s returns { found: false } for an empty result",
+    async (tool) => {
+      const result = await routeToolCall(
+        tool,
+        { uid: "missing", graph: "test" },
+        {
+          resolveGraph: async () => ({ name: "test-graph", type: "hosted", nickname: "test" }),
+          createClient: () => ({ call: async () => ({ success: true, result: {} }) }),
+          tokenInfoMode: "skip",
+        },
+      );
+
+      expect(result.isError).toBeFalsy();
+      const parsed = JSON.parse((result.content[0] as { text: string }).text);
+      expect(parsed.found).toBe(false);
+      expect(parsed.uid).toBeUndefined();
+    },
+  );
 });
